@@ -79,6 +79,7 @@ func main() {
 	r.Use(middleware.Logger(zapLogger))
 	r.Use(middleware.CORS())
 	r.Use(middleware.Metrics())
+	r.Use(middleware.RateLimit(middleware.NewIPRateLimiter(10, 20))) // 10 req/s, burst 20
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "user-svc"})
