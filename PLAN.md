@@ -43,16 +43,24 @@
 
 ---
 
-## 阶段四：微服务治理 [进行中]
+## 阶段四：微服务治理 [已完成]
 
-- [ ] **可观测性 - 日志**：结构化日志（已有 Zap）、统一日志格式
-- [ ] **可观测性 - 指标**：Prometheus metrics 暴露 + 自定义业务指标
-- [ ] **可观测性 - 链路追踪**：OpenTelemetry + Jaeger 跨服务追踪
-- [ ] **弹性设计 - 熔断**：gobreaker 熔断器保护 gRPC 调用
-- [ ] **弹性设计 - 限流**：令牌桶限流中间件
-- [ ] **弹性设计 - 重试**：gRPC 调用重试与退避策略
-- [ ] **健康检查**：readiness / liveness probe 标准化
-- [ ] Docker Compose 集成 Prometheus + Grafana + Jaeger
+**Commits:**
+- `84521f3` - Prometheus HTTP 指标中间件
+- `3610afc` - OpenTelemetry 链路追踪
+- `82bb61c` - 熔断器保护 gRPC 调用
+- `85c5365` - 令牌桶限流中间件
+- `682268f` - gRPC 重试退避 + 健康检查
+- `9519987` - Prometheus + Grafana + Jaeger 监控栈
+
+- [x] **可观测性 - 日志**：结构化日志（Zap）
+- [x] **可观测性 - 指标**：Prometheus metrics 暴露
+- [x] **可观测性 - 链路追踪**：OpenTelemetry + Jaeger 跨服务追踪
+- [x] **弹性设计 - 熔断**：gobreaker 熔断器保护 gRPC 调用
+- [x] **弹性设计 - 限流**：令牌桶限流中间件
+- [x] **弹性设计 - 重试**：gRPC 调用重试与指数退避
+- [x] **健康检查**：/health 包含 DB 连接状态
+- [x] Docker Compose 集成 Prometheus + Grafana + Jaeger
 
 ---
 
@@ -86,8 +94,10 @@
 | 日志 | Zap |
 | 认证 | JWT (golang-jwt) |
 | 容器 | Docker + Docker Compose |
-| 监控（计划） | Prometheus + Grafana |
-| 链路追踪（计划） | OpenTelemetry + Jaeger |
+| 监控 | Prometheus + Grafana |
+| 链路追踪 | OpenTelemetry + Jaeger |
+| 熔断 | gobreaker |
+| 限流 | x/time/rate |
 
 ## 项目结构
 
@@ -100,11 +110,16 @@ go-server/
 ├── internal/
 │   ├── user/               # user-svc 业务代码
 │   ├── order/              # order-svc 业务代码
-│   ├── client/             # gRPC 客户端封装
+│   ├── client/             # gRPC 客户端封装（熔断 + 重试）
 │   ├── config/             # 共用配置
-│   └── middleware/          # 共用中间件
+│   ├── middleware/          # 共用中间件（JWT/CORS/日志/metrics/限流/熔断）
+│   └── telemetry/          # OpenTelemetry 初始化
+├── deployments/
+│   ├── prometheus.yml      # Prometheus 抓取配置
+│   └── grafana/            # Grafana 数据源 provisioning
 ├── config/                 # YAML 配置文件
 ├── Dockerfile              # 多目标构建
-├── docker-compose.yml      # 本地开发编排
-└── Makefile
+├── docker-compose.yml      # 编排（2 DB + 2 Service + Prometheus + Grafana + Jaeger）
+├── Makefile
+└── PLAN.md                 # 项目学习计划
 ```
