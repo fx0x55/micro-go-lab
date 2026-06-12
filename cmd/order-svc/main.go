@@ -67,10 +67,12 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger(zapLogger))
 	r.Use(middleware.CORS())
+	r.Use(middleware.Metrics())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "order-svc"})
 	})
+	r.GET("/metrics", middleware.PrometheusHandler())
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.JWTAuth(cfg.JWT.Secret))
