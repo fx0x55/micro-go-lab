@@ -82,7 +82,17 @@ func main() {
 	r.Use(middleware.RateLimit(middleware.NewIPRateLimiter(10, 20))) // 10 req/s, burst 20
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "user-svc"})
+		dbOK := true
+		if sqlDB, err := db.DB(); err != nil || sqlDB.Ping() != nil {
+			dbOK = false
+		}
+		status := "ok"
+		code := 200
+		if !dbOK {
+			status = "degraded"
+			code = 503
+		}
+		c.JSON(code, gin.H{"status": status, "service": "user-svc", "db": dbOK})
 	})
 	r.GET("/metrics", middleware.PrometheusHandler())
 
