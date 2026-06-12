@@ -8,10 +8,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	UserSvc  UserSvcConfig  `mapstructure:"user_svc"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	UserSvc   UserSvcConfig   `mapstructure:"user_svc"`
+	Telemetry TelemetryConfig `mapstructure:"telemetry"`
 }
 
 type ServerConfig struct {
@@ -38,6 +39,11 @@ type JWTConfig struct {
 
 type UserSvcConfig struct {
 	GRPCAddr string `mapstructure:"grpc_addr"`
+}
+
+type TelemetryConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Endpoint string `mapstructure:"endpoint"`
 }
 
 func Load(path string) *Config {

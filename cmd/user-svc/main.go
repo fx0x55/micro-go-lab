@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -22,6 +23,7 @@ import (
 	userv1 "github.com/wokoworks/go-server/gen/user/v1"
 	"github.com/wokoworks/go-server/internal/config"
 	"github.com/wokoworks/go-server/internal/middleware"
+	"github.com/wokoworks/go-server/internal/telemetry"
 	usergrpc "github.com/wokoworks/go-server/internal/user/grpc"
 	"github.com/wokoworks/go-server/internal/user/handler"
 	"github.com/wokoworks/go-server/internal/user/model"
@@ -34,6 +36,15 @@ func main() {
 
 	zapLogger, _ := zap.NewProduction()
 	defer zapLogger.Sync()
+
+	// Telemetry
+	if cfg.Telemetry.Enabled {
+		shutdown, err := telemetry.Init("user-svc", cfg.Telemetry.Endpoint)
+		if err != nil {
+			log.Fatalf("failed to init telemetry: %v", err)
+		}
+		defer shutdown(context.Background())
+	}
 
 	// Database
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
@@ -98,7 +109,9 @@ func main() {
 	}
 
 	// gRPC server
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 	userv1.RegisterUserServiceServer(grpcSrv, usergrpc.NewUserGRPCServer(userSvc))
 	reflection.Register(grpcSrv)
 

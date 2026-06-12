@@ -18,3 +18,7 @@ user_svc:
 jwt:
   secret: change-me-in-production
   expiration: 24h
+
+telemetry:
+  enabled: true
+  endpoint: "localhost:4317"

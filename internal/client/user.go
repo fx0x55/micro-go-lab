@@ -4,6 +4,7 @@ import (
 	"context"
 
 	userv1 "github.com/wokoworks/go-server/gen/user/v1"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -18,6 +19,7 @@ type UserClient struct {
 func NewUserClient(addr string, logger *zap.Logger) (*UserClient, error) {
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
 		return nil, err

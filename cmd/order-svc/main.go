@@ -19,6 +19,7 @@ import (
 	"github.com/wokoworks/go-server/internal/client"
 	"github.com/wokoworks/go-server/internal/config"
 	"github.com/wokoworks/go-server/internal/middleware"
+	"github.com/wokoworks/go-server/internal/telemetry"
 	"github.com/wokoworks/go-server/internal/order/handler"
 	"github.com/wokoworks/go-server/internal/order/model"
 	"github.com/wokoworks/go-server/internal/order/repository"
@@ -30,6 +31,15 @@ func main() {
 
 	zapLogger, _ := zap.NewProduction()
 	defer zapLogger.Sync()
+
+	// Telemetry
+	if cfg.Telemetry.Enabled {
+		shutdown, err := telemetry.Init("order-svc", cfg.Telemetry.Endpoint)
+		if err != nil {
+			log.Fatalf("failed to init telemetry: %v", err)
+		}
+		defer shutdown(context.Background())
+	}
 
 	// Connect to user-svc via gRPC
 	userCli, err := client.NewUserClient(cfg.UserSvc.GRPCAddr, zapLogger)
