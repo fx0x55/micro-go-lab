@@ -45,6 +45,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_HOST: users-db
+      TELEMETRY_ENABLED: "true"
+      TELEMETRY_ENDPOINT: "jaeger:4317"
 
   order-svc:
     build:
@@ -60,6 +62,35 @@ services:
     environment:
       DATABASE_HOST: orders-db
       USER_SVC_GRPC_ADDR: "user-svc:9090"
+      TELEMETRY_ENABLED: "true"
+      TELEMETRY_ENDPOINT: "jaeger:4317"
+
+  # === Monitoring ===
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./deployments/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
 
 volumes:
   users-db-data:
