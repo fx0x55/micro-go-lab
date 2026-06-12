@@ -1,0 +1,66 @@
+services:
+  # === Databases ===
+  users-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - users-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  orders-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orders_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - orders-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === Services ===
+  user-svc:
+    build:
+      context: .
+      target: user-svc
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      users-db:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: users-db
+
+  order-svc:
+    build:
+      context: .
+      target: order-svc
+    ports:
+      - "8081:8081"
+    depends_on:
+      orders-db:
+        condition: service_healthy
+      user-svc:
+        condition: service_started
+    environment:
+      DATABASE_HOST: orders-db
+      USER_SVC_GRPC_ADDR: "user-svc:9090"
+
+volumes:
+  users-db-data:
+  orders-db-data:

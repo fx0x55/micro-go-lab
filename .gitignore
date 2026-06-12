@@ -1,0 +1,21 @@
+# Binaries
+bin/
+*.exe
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Env
+.env
+*.env.local
+
+# Generated protobuf (can regenerate from proto/)
+gen/
