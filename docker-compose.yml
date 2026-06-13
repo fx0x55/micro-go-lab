@@ -1,4 +1,21 @@
 services:
+  # === Infrastructure ===
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.5.21
+    command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "8589934592"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # === Databases ===
   users-db:
     image: postgres:16-alpine
@@ -43,10 +60,12 @@ services:
     depends_on:
       users-db:
         condition: service_healthy
+      etcd:
+        condition: service_healthy
     environment:
       DATABASE_HOST: users-db
-      TELEMETRY_ENABLED: "true"
-      TELEMETRY_ENDPOINT: "jaeger:4317"
+      GRPCCONF_ETCD_HOSTS: "etcd:2379"
+      GRPCCONF_ETCD_KEY: "user-svc.rpc"
 
   order-svc:
     build:
@@ -61,9 +80,8 @@ services:
         condition: service_started
     environment:
       DATABASE_HOST: orders-db
-      USER_SVC_GRPC_ADDR: "user-svc:9090"
-      TELEMETRY_ENABLED: "true"
-      TELEMETRY_ENDPOINT: "jaeger:4317"
+      USERSVC_ETCD_HOSTS: "etcd:2379"
+      USERSVC_ETCD_KEY: "user-svc.rpc"
 
   # === Monitoring ===
   prometheus:
