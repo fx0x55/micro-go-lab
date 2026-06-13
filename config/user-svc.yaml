@@ -1,22 +1,24 @@
-server:
-  port: 8080
-  grpc_port: 9090
-  read_timeout: 10s
-  write_timeout: 10s
+Name: user-svc
+Host: 0.0.0.0
+Port: 8080
+Mode: dev
 
-database:
-  host: localhost
-  port: 5432
-  user: postgres
-  password: postgres
-  dbname: users_db
-  max_open_conns: 25
-  max_idle_conns: 10
+GRPCConf:
+  Port: 9090
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: user-svc.rpc
 
-jwt:
-  secret: change-me-in-production
-  expiration: 24h
+Database:
+  Host: localhost
+  Port: 5432
+  User: postgres
+  Password: postgres
+  DBName: users_db
+  MaxOpenConns: 25
+  MaxIdleConns: 10
 
-telemetry:
-  enabled: true
-  endpoint: "localhost:4317"
+JWT:
+  Secret: change-me-in-production
+  Expiration: 24h

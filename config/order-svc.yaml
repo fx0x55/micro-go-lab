@@ -1,24 +1,24 @@
-server:
-  port: 8081
-  read_timeout: 10s
-  write_timeout: 10s
+Name: order-svc
+Host: 0.0.0.0
+Port: 8081
+Mode: dev
 
-database:
-  host: localhost
-  port: 5433
-  user: postgres
-  password: postgres
-  dbname: orders_db
-  max_open_conns: 25
-  max_idle_conns: 10
+Database:
+  Host: localhost
+  Port: 5433
+  User: postgres
+  Password: postgres
+  DBName: orders_db
+  MaxOpenConns: 25
+  MaxIdleConns: 10
 
-user_svc:
-  grpc_addr: "localhost:9090"
+UserSvc:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: user-svc.rpc
+  Timeout: 2000
 
-jwt:
-  secret: change-me-in-production
-  expiration: 24h
-
-telemetry:
-  enabled: true
-  endpoint: "localhost:4317"
+JWT:
+  Secret: change-me-in-production
+  Expiration: 24h

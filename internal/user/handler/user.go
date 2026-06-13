@@ -2,8 +2,10 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/zeromicro/go-zero/rest/httpx"
+
 	"github.com/wokoworks/go-server/internal/middleware"
 	"github.com/wokoworks/go-server/internal/user/service"
 )
@@ -16,54 +18,54 @@ func NewUserHandler(userSvc *service.UserService) *UserHandler {
 	return &UserHandler{userSvc: userSvc}
 }
 
-func (h *UserHandler) Register(c *gin.Context) {
+func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req service.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
 	user, err := h.userSvc.Register(&req)
 	if err != nil {
 		if errors.Is(err, service.ErrUserExists) {
-			middleware.Error(c, 409, err.Error())
+			middleware.ErrorJson(w, http.StatusConflict, err.Error())
 			return
 		}
-		middleware.InternalError(c, "registration failed")
+		middleware.InternalError(w, "registration failed")
 		return
 	}
 
-	middleware.Created(c, user)
+	middleware.CreatedJson(w, user)
 }
 
-func (h *UserHandler) Login(c *gin.Context) {
+func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req service.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
 	resp, err := h.userSvc.Login(&req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
-			middleware.Unauthorized(c, err.Error())
+			middleware.Unauthorized(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "login failed")
+		middleware.InternalError(w, "login failed")
 		return
 	}
 
-	middleware.Success(c, resp)
+	middleware.OkJson(w, resp)
 }
 
-func (h *UserHandler) Profile(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+func (h *UserHandler) Profile(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
 
 	user, err := h.userSvc.GetByID(userID)
 	if err != nil {
-		middleware.NotFound(c, "user not found")
+		middleware.NotFound(w, "user not found")
 		return
 	}
 
-	middleware.Success(c, user)
+	middleware.OkJson(w, user)
 }

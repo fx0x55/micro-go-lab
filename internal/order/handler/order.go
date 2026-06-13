@@ -2,9 +2,10 @@ package handler
 
 import (
 	"errors"
-	"strconv"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/zeromicro/go-zero/rest/httpx"
+
 	"github.com/wokoworks/go-server/internal/middleware"
 	"github.com/wokoworks/go-server/internal/order/service"
 )
@@ -17,87 +18,86 @@ func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
 	return &OrderHandler{orderSvc: orderSvc}
 }
 
-func (h *OrderHandler) Create(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+type orderIDReq struct {
+	ID uint `path:"id"`
+}
+
+func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
 
 	var req service.CreateOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
-	order, err := h.orderSvc.Create(c.Request.Context(), userID, &req)
+	order, err := h.orderSvc.Create(r.Context(), userID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			middleware.BadRequest(c, err.Error())
+			middleware.BadRequest(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to create order")
+		middleware.InternalError(w, "failed to create order")
 		return
 	}
 
-	middleware.Created(c, order)
+	middleware.CreatedJson(w, order)
 }
 
-func (h *OrderHandler) Get(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		middleware.BadRequest(c, "invalid id")
+func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
+	var req orderIDReq
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	order, err := h.orderSvc.GetByID(id)
+	order, err := h.orderSvc.GetByID(req.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
-			middleware.NotFound(c, err.Error())
+			middleware.NotFound(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to get order")
+		middleware.InternalError(w, "failed to get order")
 		return
 	}
 
-	middleware.Success(c, order)
+	middleware.OkJson(w, order)
 }
 
-func (h *OrderHandler) List(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
 
 	orders, err := h.orderSvc.ListByUserID(userID)
 	if err != nil {
-		middleware.InternalError(c, "failed to list orders")
+		middleware.InternalError(w, "failed to list orders")
 		return
 	}
 
-	middleware.Success(c, orders)
+	middleware.OkJson(w, orders)
 }
 
-func (h *OrderHandler) UpdateStatus(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		middleware.BadRequest(c, "invalid id")
+func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	var pathReq orderIDReq
+	if err := httpx.Parse(r, &pathReq); err != nil {
+		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
 	var req service.UpdateOrderStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
-	order, err := h.orderSvc.UpdateStatus(id, &req)
+	order, err := h.orderSvc.UpdateStatus(pathReq.ID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
-			middleware.NotFound(c, err.Error())
+			middleware.NotFound(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to update order")
+		middleware.InternalError(w, "failed to update order")
 		return
 	}
 
-	middleware.Success(c, order)
-}
-
-func parseID(c *gin.Context) (uint, error) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	return uint(id), err
+	middleware.OkJson(w, order)
 }

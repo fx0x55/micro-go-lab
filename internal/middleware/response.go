@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 type Response struct {
@@ -12,41 +12,41 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
-func Success(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusOK, Response{
+func OkJson(w http.ResponseWriter, data interface{}) {
+	httpx.OkJson(w, Response{
 		Code:    0,
 		Message: "ok",
 		Data:    data,
 	})
 }
 
-func Created(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusCreated, Response{
+func CreatedJson(w http.ResponseWriter, data interface{}) {
+	httpx.WriteJson(w, http.StatusCreated, Response{
 		Code:    0,
 		Message: "created",
 		Data:    data,
 	})
 }
 
-func Error(c *gin.Context, status int, msg string) {
-	c.JSON(status, Response{
+func ErrorJson(w http.ResponseWriter, status int, msg string) {
+	httpx.WriteJson(w, status, Response{
 		Code:    -1,
 		Message: msg,
 	})
 }
 
-func BadRequest(c *gin.Context, msg string) {
-	Error(c, http.StatusBadRequest, msg)
+func BadRequest(w http.ResponseWriter, msg string) {
+	ErrorJson(w, http.StatusBadRequest, msg)
 }
 
-func Unauthorized(c *gin.Context, msg string) {
-	Error(c, http.StatusUnauthorized, msg)
+func Unauthorized(w http.ResponseWriter, msg string) {
+	ErrorJson(w, http.StatusUnauthorized, msg)
 }
 
-func NotFound(c *gin.Context, msg string) {
-	Error(c, http.StatusNotFound, msg)
+func NotFound(w http.ResponseWriter, msg string) {
+	ErrorJson(w, http.StatusNotFound, msg)
 }
 
-func InternalError(c *gin.Context, msg string) {
-	Error(c, http.StatusInternalServerError, msg)
+func InternalError(w http.ResponseWriter, msg string) {
+	ErrorJson(w, http.StatusInternalServerError, msg)
 }

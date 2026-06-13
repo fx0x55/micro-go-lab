@@ -2,9 +2,10 @@ package handler
 
 import (
 	"errors"
-	"strconv"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/zeromicro/go-zero/rest/httpx"
+
 	"github.com/wokoworks/go-server/internal/middleware"
 	"github.com/wokoworks/go-server/internal/user/service"
 )
@@ -17,102 +18,101 @@ func NewTodoHandler(todoSvc *service.TodoService) *TodoHandler {
 	return &TodoHandler{todoSvc: todoSvc}
 }
 
-func (h *TodoHandler) Create(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+type todoIDReq struct {
+	ID uint `path:"id"`
+}
+
+func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
 
 	var req service.CreateTodoRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
 	todo, err := h.todoSvc.Create(userID, &req)
 	if err != nil {
-		middleware.InternalError(c, "failed to create todo")
+		middleware.InternalError(w, "failed to create todo")
 		return
 	}
 
-	middleware.Created(c, todo)
+	middleware.CreatedJson(w, todo)
 }
 
-func (h *TodoHandler) List(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
 
 	todos, err := h.todoSvc.ListByUserID(userID)
 	if err != nil {
-		middleware.InternalError(c, "failed to list todos")
+		middleware.InternalError(w, "failed to list todos")
 		return
 	}
 
-	middleware.Success(c, todos)
+	middleware.OkJson(w, todos)
 }
 
-func (h *TodoHandler) Get(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		middleware.BadRequest(c, "invalid id")
+func (h *TodoHandler) Get(w http.ResponseWriter, r *http.Request) {
+	var req todoIDReq
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	todo, err := h.todoSvc.GetByID(id)
+	todo, err := h.todoSvc.GetByID(req.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
-			middleware.NotFound(c, err.Error())
+			middleware.NotFound(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to get todo")
+		middleware.InternalError(w, "failed to get todo")
 		return
 	}
 
-	middleware.Success(c, todo)
+	middleware.OkJson(w, todo)
 }
 
-func (h *TodoHandler) Update(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		middleware.BadRequest(c, "invalid id")
+func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
+	var pathReq todoIDReq
+	if err := httpx.Parse(r, &pathReq); err != nil {
+		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
 	var req service.UpdateTodoRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.BadRequest(c, err.Error())
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, err.Error())
 		return
 	}
 
-	todo, err := h.todoSvc.Update(id, &req)
+	todo, err := h.todoSvc.Update(pathReq.ID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
-			middleware.NotFound(c, err.Error())
+			middleware.NotFound(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to update todo")
+		middleware.InternalError(w, "failed to update todo")
 		return
 	}
 
-	middleware.Success(c, todo)
+	middleware.OkJson(w, todo)
 }
 
-func (h *TodoHandler) Delete(c *gin.Context) {
-	id, err := parseID(c)
-	if err != nil {
-		middleware.BadRequest(c, "invalid id")
+func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	var req todoIDReq
+	if err := httpx.Parse(r, &req); err != nil {
+		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	if err := h.todoSvc.Delete(id); err != nil {
+	if err := h.todoSvc.Delete(req.ID); err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
-			middleware.NotFound(c, err.Error())
+			middleware.NotFound(w, err.Error())
 			return
 		}
-		middleware.InternalError(c, "failed to delete todo")
+		middleware.InternalError(w, "failed to delete todo")
 		return
 	}
 
-	middleware.Success(c, nil)
-}
-
-func parseID(c *gin.Context) (uint, error) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	return uint(id), err
+	middleware.OkJson(w, nil)
 }

@@ -1,25 +1,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+	"github.com/zeromicro/go-zero/core/conf"
+	goservice "github.com/zeromicro/go-zero/core/service"
+	"github.com/zeromicro/go-zero/rest"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"github.com/wokoworks/go-server/internal/client"
 	"github.com/wokoworks/go-server/internal/config"
-	"github.com/wokoworks/go-server/internal/middleware"
-	"github.com/wokoworks/go-server/internal/telemetry"
 	"github.com/wokoworks/go-server/internal/order/handler"
 	"github.com/wokoworks/go-server/internal/order/model"
 	"github.com/wokoworks/go-server/internal/order/repository"
@@ -27,25 +19,12 @@ import (
 )
 
 func main() {
-	cfg := config.Load("config/order-svc.yaml")
+	var cfg config.Config
+	conf.MustLoad("config/order-svc.yaml", &cfg)
+	cfg.MustSetUp()
 
-	zapLogger, _ := zap.NewProduction()
-	defer zapLogger.Sync()
-
-	// Telemetry
-	if cfg.Telemetry.Enabled {
-		shutdown, err := telemetry.Init("order-svc", cfg.Telemetry.Endpoint)
-		if err != nil {
-			log.Fatalf("failed to init telemetry: %v", err)
-		}
-		defer shutdown(context.Background())
-	}
-
-	// Connect to user-svc via gRPC
-	userCli, err := client.NewUserClient(cfg.UserSvc.GRPCAddr, zapLogger)
-	if err != nil {
-		log.Fatalf("failed to connect user-svc: %v", err)
-	}
+	// Connect to user-svc via gRPC (etcd service discovery)
+	userCli := client.NewUserClient(cfg.UserSvc)
 	defer userCli.Close()
 
 	// Database
@@ -57,14 +36,14 @@ func main() {
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
 
 	if err := db.AutoMigrate(&model.Order{}); err != nil {
-		log.Fatalf("failed to migrate: %v", err)
+		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
 	// Wire dependencies
@@ -73,62 +52,16 @@ func main() {
 	orderHandler := handler.NewOrderHandler(orderSvc)
 
 	// HTTP server
-	r := gin.New()
-	r.Use(gin.Recovery())
-	r.Use(middleware.Logger(zapLogger))
-	r.Use(middleware.CORS())
-	r.Use(middleware.Metrics())
-	r.Use(middleware.RateLimit(middleware.NewIPRateLimiter(10, 20)))
-
-	r.GET("/health", func(c *gin.Context) {
-		dbOK := true
-		if sqlDB, err := db.DB(); err != nil || sqlDB.Ping() != nil {
-			dbOK = false
-		}
-		status := "ok"
-		code := 200
-		if !dbOK {
-			status = "degraded"
-			code = 503
-		}
-		c.JSON(code, gin.H{"status": status, "service": "order-svc", "db": dbOK})
+	httpSrv := rest.MustNewServer(rest.RestConf{
+		ServiceConf: cfg.ServiceConf,
+		Host:        cfg.Host,
+		Port:        cfg.Port,
 	})
-	r.GET("/metrics", middleware.PrometheusHandler())
+	defer httpSrv.Stop()
+	registerHTTPRoutes(httpSrv, orderHandler, cfg)
 
-	api := r.Group("/api/v1")
-	api.Use(middleware.JWTAuth(cfg.JWT.Secret))
-	{
-		api.POST("/orders", orderHandler.Create)
-		api.GET("/orders", orderHandler.List)
-		api.GET("/orders/:id", orderHandler.Get)
-		api.PUT("/orders/:id/status", orderHandler.UpdateStatus)
-	}
-
-	httpSrv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      r,
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
-	}
-
-	go func() {
-		zapLogger.Info("order-svc starting", zap.Int("port", cfg.Server.Port))
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			zapLogger.Fatal("server failed", zap.Error(err))
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	zapLogger.Info("shutting down order-svc...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := httpSrv.Shutdown(ctx); err != nil {
-		zapLogger.Fatal("server forced shutdown", zap.Error(err))
-	}
-
-	zapLogger.Info("order-svc exited")
+	// Start with graceful shutdown
+	group := goservice.NewServiceGroup()
+	group.Add(httpSrv)
+	group.Start()
 }
