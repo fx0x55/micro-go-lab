@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/wokoworks/go-server/internal/config"
 	"github.com/wokoworks/go-server/internal/user/model"
 	"github.com/wokoworks/go-server/internal/user/repository"
@@ -62,6 +63,10 @@ func (s *UserService) Register(req *RegisterRequest) (*model.User, error) {
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+			return nil, ErrUserExists
+		}
 		return nil, err
 	}
 	return user, nil
