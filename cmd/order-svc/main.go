@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -14,6 +15,7 @@ import (
 	"github.com/wokoworks/go-server/internal/order/model"
 	"github.com/wokoworks/go-server/internal/order/repository"
 	"github.com/wokoworks/go-server/internal/order/service"
+	"github.com/wokoworks/go-server/internal/telemetry"
 	"github.com/wokoworks/go-server/internal/validator"
 )
 
@@ -23,6 +25,13 @@ func main() {
 	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
 	validator.Init()
+
+	// Telemetry（OpenTelemetry → Jaeger）
+	shutdown, err := telemetry.Init(cfg.Name, cfg.Telemetry.OTLPEndpoint)
+	if err != nil {
+		panic(fmt.Sprintf("failed to init telemetry: %v", err))
+	}
+	defer shutdown(context.Background())
 
 	// Connect to user-svc via gRPC (etcd service discovery)
 	userCli := client.NewUserClient(cfg.UserSvc)
@@ -36,6 +45,10 @@ func main() {
 	if err := gormDB.AutoMigrate(&model.Order{}); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get sql.DB: %v", err))
+	}
 
 	// Wire dependencies
 	orderRepo := repository.NewOrderRepository(gormDB)
@@ -45,7 +58,7 @@ func main() {
 	// HTTP server
 	httpSrv := rest.MustNewServer(cfg.RestConf)
 	defer httpSrv.Stop()
-	registerHTTPRoutes(httpSrv, orderHandler, cfg)
+	registerHTTPRoutes(httpSrv, orderHandler, cfg, sqlDB.Ping)
 
 	// Start with graceful shutdown
 	group := goservice.NewServiceGroup()

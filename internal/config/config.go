@@ -14,10 +14,43 @@ import (
 // 两个服务直接复用，避免手动拼装 RestConf。
 type Config struct {
 	rest.RestConf
-	GRPC     GRPCConfig     `json:",optional"` // 仅 user-svc 监听 gRPC 时使用
-	Database DatabaseConfig
-	JWT      JWTConfig
-	UserSvc  UserSvcConfig `json:",optional"` // 仅 order-svc 调用 user-svc 时使用
+	GRPC      GRPCConfig      `json:",optional"` // 仅 user-svc 监听 gRPC 时使用
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	UserSvc   UserSvcConfig   `json:",optional"` // 仅 order-svc 调用 user-svc 时使用
+	Telemetry TelemetryConfig `json:",optional"`
+}
+
+// GRPCConfig 是 gRPC 服务端监听配置，ServiceConf 复用 HTTP 侧的配置
+type GRPCConfig struct {
+	ListenOn string          `json:",default=:9090"`
+	Etcd     discov.EtcdConf `json:",optional"`
+}
+
+// TelemetryConfig 是 OpenTelemetry 链路追踪配置
+type TelemetryConfig struct {
+	OTLPEndpoint string `json:",optional"` // OTLP gRPC 接收端点，如 jaeger:4317
+}
+
+type DatabaseConfig struct {
+	Host         string `json:",default=localhost"`
+	Port         int    `json:",default=5432"`
+	User         string
+	Password     string
+	DBName       string
+	MaxOpenConns int `json:",default=25"`
+	MaxIdleConns int `json:",default=10"`
+}
+
+type JWTConfig struct {
+	Secret     string
+	Expiration time.Duration `json:",default=24h"`
+}
+
+type UserSvcConfig struct {
+	Etcd      discov.EtcdConf
+	Endpoints []string `json:",optional"`
+	Timeout   int64    `json:",default=2000"`
 }
 
 // ApplyEnvOverrides 用环境变量覆盖部署相关配置。
@@ -26,6 +59,9 @@ type Config struct {
 func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
 		c.JWT.Secret = s
+	}
+	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
+		c.Telemetry.OTLPEndpoint = s
 	}
 	if s := os.Getenv("DATABASE_HOST"); s != "" {
 		c.Database.Host = s
@@ -54,31 +90,4 @@ func envList(name string) []string {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts
-}
-
-// GRPCConfig 是 gRPC 服务端监听配置，ServiceConf 复用 HTTP 侧的配置
-type GRPCConfig struct {
-	ListenOn string          `json:",default=:9090"`
-	Etcd     discov.EtcdConf `json:",optional"`
-}
-
-type DatabaseConfig struct {
-	Host         string `json:",default=localhost"`
-	Port         int    `json:",default=5432"`
-	User         string
-	Password     string
-	DBName       string
-	MaxOpenConns int `json:",default=25"`
-	MaxIdleConns int `json:",default=10"`
-}
-
-type JWTConfig struct {
-	Secret     string
-	Expiration time.Duration `json:",default=24h"`
-}
-
-type UserSvcConfig struct {
-	Etcd      discov.EtcdConf
-	Endpoints []string `json:",optional"`
-	Timeout   int64    `json:",default=2000"`
 }

@@ -10,12 +10,12 @@ import (
 	"github.com/wokoworks/go-server/internal/order/handler"
 )
 
-func registerHTTPRoutes(srv *rest.Server, orderH *handler.OrderHandler, cfg config.Config) {
-	// Health check
+func registerHTTPRoutes(srv *rest.Server, orderH *handler.OrderHandler, cfg config.Config, ping func() error) {
+	// Health check（含 DB 连通性）
 	srv.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/health",
-		Handler: middleware.HealthHandler("order-svc"),
+		Handler: middleware.HealthHandler("order-svc", ping),
 	})
 
 	// All order routes require JWT

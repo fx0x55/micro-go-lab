@@ -22,3 +22,11 @@ UserSvc:
 JWT:
   Secret: change-me-in-production
   Expiration: 24h
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9102
+  Path: /metrics
+
+Telemetry:
+  OTLPEndpoint: localhost:4317

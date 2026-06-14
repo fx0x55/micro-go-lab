@@ -10,12 +10,12 @@ import (
 	"github.com/wokoworks/go-server/internal/user/handler"
 )
 
-func registerHTTPRoutes(srv *rest.Server, userH *handler.UserHandler, todoH *handler.TodoHandler, cfg config.Config) {
-	// Health check
+func registerHTTPRoutes(srv *rest.Server, userH *handler.UserHandler, todoH *handler.TodoHandler, cfg config.Config, ping func() error) {
+	// Health check（含 DB 连通性）
 	srv.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/health",
-		Handler: middleware.HealthHandler("user-svc"),
+		Handler: middleware.HealthHandler("user-svc", ping),
 	})
 
 	// Public routes (no JWT)

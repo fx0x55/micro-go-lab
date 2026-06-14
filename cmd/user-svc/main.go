@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -12,6 +13,7 @@ import (
 	userv1 "github.com/wokoworks/go-server/gen/user/v1"
 	"github.com/wokoworks/go-server/internal/config"
 	dbx "github.com/wokoworks/go-server/internal/db"
+	"github.com/wokoworks/go-server/internal/telemetry"
 	usergrpc "github.com/wokoworks/go-server/internal/user/grpc"
 	"github.com/wokoworks/go-server/internal/user/handler"
 	"github.com/wokoworks/go-server/internal/user/model"
@@ -27,6 +29,13 @@ func main() {
 	cfg.MustSetUp()
 	validator.Init()
 
+	// Telemetry（OpenTelemetry → Jaeger）
+	shutdown, err := telemetry.Init(cfg.Name, cfg.Telemetry.OTLPEndpoint)
+	if err != nil {
+		panic(fmt.Sprintf("failed to init telemetry: %v", err))
+	}
+	defer shutdown(context.Background())
+
 	// Database
 	gormDB, err := dbx.New(cfg.Database)
 	if err != nil {
@@ -34,6 +43,10 @@ func main() {
 	}
 	if err := gormDB.AutoMigrate(&model.User{}, &model.Todo{}); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get sql.DB: %v", err))
 	}
 
 	// Wire dependencies
@@ -47,7 +60,7 @@ func main() {
 	// HTTP server
 	httpSrv := rest.MustNewServer(cfg.RestConf)
 	defer httpSrv.Stop()
-	registerHTTPRoutes(httpSrv, userHandler, todoHandler, cfg)
+	registerHTTPRoutes(httpSrv, userHandler, todoHandler, cfg, sqlDB.Ping)
 
 	// gRPC server
 	grpcSrv := zrpc.MustNewServer(zrpc.RpcServerConf{

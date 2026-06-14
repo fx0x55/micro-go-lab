@@ -57,6 +57,7 @@ services:
     ports:
       - "8080:8080"
       - "9090:9090"
+      - "9101:9101"
     depends_on:
       users-db:
         condition: service_healthy
@@ -67,6 +68,7 @@ services:
       GRPC_ETCD_HOSTS: "etcd:2379"
       GRPC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      OTLP_ENDPOINT: jaeger:4317
 
   order-svc:
     build:
@@ -74,6 +76,7 @@ services:
       target: order-svc
     ports:
       - "8081:8081"
+      - "9102:9102"
     depends_on:
       orders-db:
         condition: service_healthy
@@ -84,6 +87,7 @@ services:
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      OTLP_ENDPOINT: jaeger:4317
 
   # === Monitoring ===
   prometheus:
