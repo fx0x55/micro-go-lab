@@ -14,24 +14,18 @@
 
 ## 阶段二：Web 开发与项目结构 [已完成]
 
-**Commit:** `c89e481` - 初始化 Go 微服务项目基础设施
-
-- [x] Gin 框架（路由分组、中间件、参数绑定）
-- [x] GORM 数据层（PostgreSQL、连接池、AutoMigrate）
+- [x] Web 框架（路由分组、中间件、参数绑定）
+- [x] GORM 数据层（PostgreSQL、连接池）
 - [x] 分层架构（handler → service → repository → model）
-- [x] Viper 配置管理
+- [x] 配置管理（YAML）
 - [x] JWT 认证中间件
 - [x] 统一响应封装
-- [x] 优雅关闭（signal + Shutdown）
+- [x] 优雅关闭
 - [x] Docker Compose 编排
 
 ---
 
 ## 阶段三：微服务拆分 + gRPC 通信 [已完成]
-
-**Commits:**
-- `56b0f86` - 添加 user-svc 用户服务
-- `13e028a` - 添加 order-svc 订单服务 + gRPC 服务间通信
 
 - [x] Proto 定义（user.proto: ValidateUser/GetUser）
 - [x] protoc 代码生成
@@ -45,22 +39,38 @@
 
 ## 阶段四：微服务治理 [已完成]
 
-**Commits:**
-- `84521f3` - Prometheus HTTP 指标中间件
-- `3610afc` - OpenTelemetry 链路追踪
-- `82bb61c` - 熔断器保护 gRPC 调用
-- `85c5365` - 令牌桶限流中间件
-- `682268f` - gRPC 重试退避 + 健康检查
-- `9519987` - Prometheus + Grafana + Jaeger 监控栈
+**可观测性：**
+- [x] **指标**：Prometheus metrics（go-zero 内置，`/metrics`）
+- [x] **链路追踪**：OpenTelemetry OTLP → Jaeger 跨服务追踪
+- [x] **日志**：go-zero logx 结构化日志
 
-- [x] **可观测性 - 日志**：结构化日志（Zap）
-- [x] **可观测性 - 指标**：Prometheus metrics 暴露
-- [x] **可观测性 - 链路追踪**：OpenTelemetry + Jaeger 跨服务追踪
-- [x] **弹性设计 - 熔断**：gobreaker 熔断器保护 gRPC 调用
-- [x] **弹性设计 - 限流**：令牌桶限流中间件
-- [x] **弹性设计 - 重试**：gRPC 调用重试与指数退避
-- [x] **健康检查**：/health 包含 DB 连接状态
+**弹性设计：**
+- [x] **熔断**：go-zero zrpc 客户端内置 breakers 拦截器
+- [x] **重试**：自定义 gRPC 指数退避重试拦截器（`internal/client/retry.go`）
+- [ ] **限流**：待评估（go-zero 内置 `rest.WithMiddleware` + `ratelimit` 可直接接入）
+
+**基础设施：**
+- [x] 服务注册发现：etcd + go-zero discov
+- [x] 健康检查：`/health` 含 DB Ping 探活，失败返回 503
 - [x] Docker Compose 集成 Prometheus + Grafana + Jaeger
+
+---
+
+## 阶段四补充：go-zero 迁移与代码审查修复 [已完成]
+
+迁移到 go-zero 框架后，对项目做了一次全面审查并修复了 11 项问题：
+
+- [x] 请求参数校验：引入 `go-playground/validator` + `httpx.SetValidator` 适配（`validate:` 标签）
+- [x] 越权漏洞：todo 的增删改查按 `user_id` 作用域过滤（消除 IDOR）
+- [x] 订单状态机：`pending → paid/cancelled` 合法转换校验
+- [x] 注册唯一约束：捕获 `pgconn.PgError 23505` 返回友好错误
+- [x] gRPC 接口区分 NotFound 与 Internal，`ValidateUserResponse` 带回 username
+- [x] gRPC 显式重试拦截器（指数退避，针对 Unavailable/DeadlineExceeded/ResourceExhausted）
+- [x] 配置结构对齐 go-zero（`rest.RestConf` + `ServiceConf`，环境变量走 `ApplyEnvOverrides`）
+- [x] JWT secret 走环境变量（`JWT_SECRET`），不落库不硬编码
+- [x] 数据库迁移从 `AutoMigrate` 切换到 **goose**（显式 SQL，可回滚）
+- [x] 重复代码抽取：`internal/db.New`、`middleware.GetUserID`、`middleware.HealthHandler`
+- [x] 可观测全量接入：Prometheus 指标 + OTLP 链路追踪
 
 ---
 
@@ -87,39 +97,43 @@
 
 | 层面 | 技术 |
 |------|------|
-| HTTP 框架 | Gin |
+| 微服务框架 | go-zero（rest + zrpc） |
 | ORM | GORM + PostgreSQL |
 | RPC | gRPC + Protobuf |
-| 配置 | Viper (YAML) |
-| 日志 | Zap |
-| 认证 | JWT (golang-jwt) |
+| 服务发现 | etcd + go-zero discov |
+| 配置 | go-zero conf（YAML + 环境变量覆盖） |
+| 日志 | go-zero logx |
+| 认证 | JWT HS256（golang-jwt，secret 走环境变量） |
+| 参数校验 | go-playground/validator |
+| 数据库迁移 | pressly/goose（嵌入式 SQL） |
+| 可观测性 | Prometheus + Grafana + Jaeger（OpenTelemetry OTLP） |
+| 弹性 | go-zero breakers + 自定义重试拦截器 |
 | 容器 | Docker + Docker Compose |
-| 监控 | Prometheus + Grafana |
-| 链路追踪 | OpenTelemetry + Jaeger |
-| 熔断 | gobreaker |
-| 限流 | x/time/rate |
 
 ## 项目结构
 
 ```
 go-server/
-├── proto/                  # gRPC 服务定义
+├── proto/                  # gRPC 服务定义（user.proto）
+├── gen/                    # protoc 生成代码（gitignored）
 ├── cmd/
-│   ├── user-svc/           # 用户服务入口 (:8080 REST, :9090 gRPC)
-│   └── order-svc/          # 订单服务入口 (:8081 REST)
+│   ├── user-svc/           # 用户服务入口（main.go + routes.go）
+│   └── order-svc/          # 订单服务入口（main.go + routes.go）
 ├── internal/
-│   ├── user/               # user-svc 业务代码
-│   ├── order/              # order-svc 业务代码
-│   ├── client/             # gRPC 客户端封装（熔断 + 重试）
-│   ├── config/             # 共用配置
-│   ├── middleware/          # 共用中间件（JWT/CORS/日志/metrics/限流/熔断）
-│   └── telemetry/          # OpenTelemetry 初始化
+│   ├── user/               # user-svc 业务（handler/service/repository/model/grpc）
+│   ├── order/              # order-svc 业务（handler/service/repository/model）
+│   ├── client/             # gRPC 客户端封装（user.go + retry.go 重试拦截器）
+│   ├── config/             # 共用 Config 结构 + ApplyEnvOverrides
+│   ├── db/                 # 数据库连接 + goose 迁移（migrations/{user,order}/）
+│   ├── middleware/         # 共用中间件（response/auth/health）
+│   ├── validator/          # validator/v10 适配 httpx.SetValidator
+│   └── telemetry/          # OpenTelemetry 初始化（OTLP → Jaeger）
 ├── deployments/
 │   ├── prometheus.yml      # Prometheus 抓取配置
 │   └── grafana/            # Grafana 数据源 provisioning
-├── config/                 # YAML 配置文件
+├── config/                 # YAML 配置文件（user-svc.yaml / order-svc.yaml）
 ├── Dockerfile              # 多目标构建
-├── docker-compose.yml      # 编排（2 DB + 2 Service + Prometheus + Grafana + Jaeger）
+├── docker-compose.yml      # 编排（etcd + 2 DB + 2 Service + Prometheus + Grafana + Jaeger）
 ├── Makefile
 └── PLAN.md                 # 项目学习计划
 ```

@@ -26,8 +26,15 @@ make docker-down
 # Go proxy (required in China network)
 GOPROXY=https://goproxy.cn go mod download
 
-# Regenerate protobuf (after editing proto/ files)
-protoc --go_out=gen --go-grpc_out=gen proto/user/v1/user.proto
+# Regenerate protobuf (after editing proto/ files) — output lands in gen/
+protoc --go_out=. --go-grpc_out=. \
+  --go_opt=module=github.com/wokoworks/go-server \
+  --go-grpc_opt=module=github.com/wokoworks/go-server \
+  proto/user/v1/user.proto
+
+# Database migrations run automatically at service startup (embedded goose).
+# To add a migration: drop a new SQL file in internal/db/migrations/{user,order}/
+# named NNNNN_description.sql with `-- +goose Up` / `-- +goose Down` sections.
 ```
 
 ## Architecture
@@ -46,10 +53,12 @@ internal/{svc}/model/       → GORM model structs
 ```
 
 **Shared packages:**
-- `internal/config` — single `Config` struct loaded by both services via go-zero's `conf.MustLoad`
-- `internal/middleware` — standardized JSON response helpers (`OkJson`, `CreatedJson`, `BadRequest`, `Unauthorized`, `NotFound`, `InternalError`)
-- `internal/client` — gRPC client wrapper (order-svc → user-svc)
-- `internal/telemetry` — OpenTelemetry init (defined but not yet wired into main)
+- `internal/config` — single `Config` struct loaded by both services via go-zero's `conf.MustLoad`; secrets/env via `ApplyEnvOverrides`
+- `internal/db` — GORM connection (`New`) + goose SQL migrations (`Migrate`, files embedded under `migrations/{user,order}/`)
+- `internal/middleware` — JSON response helpers (`OkJson`/`CreatedJson`/`BadRequest`/...), `GetUserID` (JWT context), `HealthHandler` (DB ping → 503 on failure)
+- `internal/client` — gRPC client wrapper (order-svc → user-svc) + exponential-backoff retry interceptor
+- `internal/validator` — `go-playground/validator` adapted to go-zero `httpx.SetValidator` (use `validate:` tags on request structs)
+- `internal/telemetry` — OpenTelemetry init (OTLP → Jaeger), wired into both `main.go`s
 
 ### Service interactions
 
@@ -61,8 +70,8 @@ internal/{svc}/model/       → GORM model structs
 
 - **JWT auth**: go-zero's built-in `rest.WithJwt(secret)` middleware; user ID extracted from context key `"user_id"`
 - **Response format**: all endpoints use the shared `middleware.Response{Code, Message, Data}` wrapper — never write raw JSON
-- **Config**: YAML files in `config/` loaded into `internal/config.Config`; env vars supported via go-zero YAML substitution
-- **Database**: PostgreSQL via GORM; schema managed by `AutoMigrate()` at startup (no migration tool)
+- **Config**: YAML files in `config/` loaded into `internal/config.Config`; secrets and deploy-specific values (DB host, etcd hosts, JWT secret, OTLP endpoint) injected via `ApplyEnvOverrides` reading `os.Getenv` — go-zero's `${VAR}` substitution does not support defaults, so explicit env overrides are used
+- **Database**: PostgreSQL via GORM; schema managed by **goose** SQL migrations (embedded via `go:embed`, run automatically at startup in `internal/db/migrate.go`) — not `AutoMigrate`
 - **Dependency injection**: manual constructor wiring in each `main.go` — `NewRepo(db)` → `NewService(repo)` → `NewHandler(svc)`
 - **Proto-generated code** lives in `gen/` (gitignored); proto source in `proto/`
 
