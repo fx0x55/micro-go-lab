@@ -66,6 +66,7 @@ services:
       DATABASE_HOST: users-db
       GRPC_ETCD_HOSTS: "etcd:2379"
       GRPC_ETCD_KEY: "user-svc.rpc"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
 
   order-svc:
     build:
@@ -82,6 +83,7 @@ services:
       DATABASE_HOST: orders-db
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
 
   # === Monitoring ===
   prometheus:

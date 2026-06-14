@@ -23,6 +23,7 @@ import (
 func main() {
 	var cfg config.Config
 	conf.MustLoad("config/user-svc.yaml", &cfg)
+	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
 	validator.Init()
 

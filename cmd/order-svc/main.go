@@ -20,6 +20,7 @@ import (
 func main() {
 	var cfg config.Config
 	conf.MustLoad("config/order-svc.yaml", &cfg)
+	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
 	validator.Init()
 
