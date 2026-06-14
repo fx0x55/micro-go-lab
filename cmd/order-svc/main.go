@@ -12,7 +12,6 @@ import (
 	"github.com/wokoworks/go-server/internal/config"
 	dbx "github.com/wokoworks/go-server/internal/db"
 	"github.com/wokoworks/go-server/internal/order/handler"
-	"github.com/wokoworks/go-server/internal/order/model"
 	"github.com/wokoworks/go-server/internal/order/repository"
 	"github.com/wokoworks/go-server/internal/order/service"
 	"github.com/wokoworks/go-server/internal/telemetry"
@@ -42,7 +41,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	if err := gormDB.AutoMigrate(&model.Order{}); err != nil {
+	if err := dbx.Migrate(gormDB, "order"); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 	sqlDB, err := gormDB.DB()

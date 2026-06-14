@@ -16,7 +16,6 @@ import (
 	"github.com/wokoworks/go-server/internal/telemetry"
 	usergrpc "github.com/wokoworks/go-server/internal/user/grpc"
 	"github.com/wokoworks/go-server/internal/user/handler"
-	"github.com/wokoworks/go-server/internal/user/model"
 	"github.com/wokoworks/go-server/internal/user/repository"
 	"github.com/wokoworks/go-server/internal/user/service"
 	"github.com/wokoworks/go-server/internal/validator"
@@ -41,7 +40,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	if err := gormDB.AutoMigrate(&model.User{}, &model.Todo{}); err != nil {
+	if err := dbx.Migrate(gormDB, "user"); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 	sqlDB, err := gormDB.DB()
