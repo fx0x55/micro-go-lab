@@ -27,14 +27,14 @@ func NewUserService(userRepo *repository.UserRepository, jwtCfg config.JWTConfig
 }
 
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=64"`
-	Password string `json:"password" binding:"required,min=6,max=128"`
-	Email    string `json:"email" binding:"required,email"`
+	Username string `json:"username" validate:"required,min=3,max=64"`
+	Password string `json:"password" validate:"required,min=6,max=128"`
+	Email    string `json:"email" validate:"required,email"`
 }
 
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username" validate:"required"`
+	Password string `json:"password" validate:"required"`
 }
 
 type LoginResponse struct {

@@ -19,12 +19,14 @@ import (
 	"github.com/wokoworks/go-server/internal/user/model"
 	"github.com/wokoworks/go-server/internal/user/repository"
 	"github.com/wokoworks/go-server/internal/user/service"
+	"github.com/wokoworks/go-server/internal/validator"
 )
 
 func main() {
 	var cfg config.Config
 	conf.MustLoad("config/user-svc.yaml", &cfg)
 	cfg.MustSetUp()
+	validator.Init()
 
 	// Database
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",

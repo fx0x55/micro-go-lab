@@ -16,12 +16,14 @@ import (
 	"github.com/wokoworks/go-server/internal/order/model"
 	"github.com/wokoworks/go-server/internal/order/repository"
 	"github.com/wokoworks/go-server/internal/order/service"
+	"github.com/wokoworks/go-server/internal/validator"
 )
 
 func main() {
 	var cfg config.Config
 	conf.MustLoad("config/order-svc.yaml", &cfg)
 	cfg.MustSetUp()
+	validator.Init()
 
 	// Connect to user-svc via gRPC (etcd service discovery)
 	userCli := client.NewUserClient(cfg.UserSvc)

@@ -25,12 +25,12 @@ func NewOrderService(orderRepo *repository.OrderRepository, userCli *client.User
 }
 
 type CreateOrderRequest struct {
-	ProductName string `json:"product_name" binding:"required,min=1,max=256"`
-	Amount      int64  `json:"amount" binding:"required,gt=0"`
+	ProductName string `json:"product_name" validate:"required,min=1,max=256"`
+	Amount      int64  `json:"amount" validate:"required,gt=0"`
 }
 
 type UpdateOrderStatusRequest struct {
-	Status string `json:"status" binding:"required,oneof=paid cancelled"`
+	Status string `json:"status" validate:"required,oneof=paid cancelled"`
 }
 
 func (s *OrderService) Create(ctx context.Context, userID uint, req *CreateOrderRequest) (*model.Order, error) {

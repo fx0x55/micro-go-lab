@@ -19,11 +19,11 @@ func NewTodoService(todoRepo *repository.TodoRepository) *TodoService {
 }
 
 type CreateTodoRequest struct {
-	Title string `json:"title" binding:"required,min=1,max=256"`
+	Title string `json:"title" validate:"required,min=1,max=256"`
 }
 
 type UpdateTodoRequest struct {
-	Title     *string `json:"title" binding:"omitempty,min=1,max=256"`
+	Title     *string `json:"title" validate:"omitempty,min=1,max=256"`
 	Completed *bool   `json:"completed"`
 }
 
