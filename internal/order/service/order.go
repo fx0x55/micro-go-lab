@@ -11,9 +11,17 @@ import (
 )
 
 var (
-	ErrOrderNotFound = errors.New("order not found")
-	ErrUserNotFound  = errors.New("user does not exist")
+	ErrOrderNotFound           = errors.New("order not found")
+	ErrUserNotFound            = errors.New("user does not exist")
+	ErrInvalidStatusTransition = errors.New("invalid status transition")
 )
+
+// validTransitions 定义订单状态允许的迁移路径
+var validTransitions = map[string]map[string]bool{
+	model.StatusPending:   {model.StatusPaid: true, model.StatusCancelled: true},
+	model.StatusPaid:      {},
+	model.StatusCancelled: {},
+}
 
 type OrderService struct {
 	orderRepo *repository.OrderRepository
@@ -47,7 +55,7 @@ func (s *OrderService) Create(ctx context.Context, userID uint, req *CreateOrder
 		UserID:      userID,
 		ProductName: req.ProductName,
 		Amount:      req.Amount,
-		Status:      "pending",
+		Status:      model.StatusPending,
 	}
 	if err := s.orderRepo.Create(order); err != nil {
 		return nil, err
@@ -78,9 +86,23 @@ func (s *OrderService) UpdateStatus(userID, id uint, req *UpdateOrderStatusReque
 		}
 		return nil, err
 	}
+
+	if !isValidTransition(order.Status, req.Status) {
+		return nil, ErrInvalidStatusTransition
+	}
+
 	order.Status = req.Status
 	if err := s.orderRepo.Update(order); err != nil {
 		return nil, err
 	}
 	return order, nil
+}
+
+// isValidTransition 校验状态迁移是否在合法路径内
+func isValidTransition(from, to string) bool {
+	allowed, ok := validTransitions[from]
+	if !ok {
+		return false
+	}
+	return allowed[to]
 }

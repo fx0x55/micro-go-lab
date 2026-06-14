@@ -99,6 +99,10 @@ func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			middleware.NotFound(w, err.Error())
 			return
 		}
+		if errors.Is(err, service.ErrInvalidStatusTransition) {
+			middleware.BadRequest(w, err.Error())
+			return
+		}
 		middleware.InternalError(w, "failed to update order")
 		return
 	}

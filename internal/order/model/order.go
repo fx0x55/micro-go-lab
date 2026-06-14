@@ -2,6 +2,12 @@ package model
 
 import "time"
 
+const (
+	StatusPending   = "pending"
+	StatusPaid      = "paid"
+	StatusCancelled = "cancelled"
+)
+
 type Order struct {
 	ID          uint      `json:"id" gorm:"primaryKey"`
 	UserID      uint      `json:"user_id" gorm:"index;not null"`
