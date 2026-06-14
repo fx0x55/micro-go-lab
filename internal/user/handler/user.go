@@ -59,7 +59,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) Profile(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	user, err := h.userSvc.GetByID(userID)
 	if err != nil {

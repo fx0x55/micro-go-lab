@@ -23,7 +23,7 @@ type orderIDReq struct {
 }
 
 func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var req service.CreateOrderRequest
 	if err := httpx.Parse(r, &req); err != nil {
@@ -45,7 +45,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var req orderIDReq
 	if err := httpx.Parse(r, &req); err != nil {
@@ -67,7 +67,7 @@ func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	orders, err := h.orderSvc.ListByUserID(userID)
 	if err != nil {
@@ -79,7 +79,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var pathReq orderIDReq
 	if err := httpx.Parse(r, &pathReq); err != nil {

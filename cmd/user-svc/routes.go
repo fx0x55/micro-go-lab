@@ -1,12 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest"
 
 	"github.com/wokoworks/go-server/internal/config"
+	"github.com/wokoworks/go-server/internal/middleware"
 	"github.com/wokoworks/go-server/internal/user/handler"
 )
 
@@ -15,7 +15,7 @@ func registerHTTPRoutes(srv *rest.Server, userH *handler.UserHandler, todoH *han
 	srv.AddRoute(rest.Route{
 		Method:  http.MethodGet,
 		Path:    "/health",
-		Handler: healthHandler,
+		Handler: middleware.HealthHandler("user-svc"),
 	})
 
 	// Public routes (no JWT)
@@ -33,10 +33,4 @@ func registerHTTPRoutes(srv *rest.Server, userH *handler.UserHandler, todoH *han
 		{Method: http.MethodPut, Path: "/api/v1/todos/:id", Handler: todoH.Update},
 		{Method: http.MethodDelete, Path: "/api/v1/todos/:id", Handler: todoH.Delete},
 	}, rest.WithJwt(cfg.JWT.Secret))
-}
-
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "service": "user-svc"})
 }

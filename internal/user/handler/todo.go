@@ -23,7 +23,7 @@ type todoIDReq struct {
 }
 
 func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var req service.CreateTodoRequest
 	if err := httpx.Parse(r, &req); err != nil {
@@ -41,7 +41,7 @@ func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	todos, err := h.todoSvc.ListByUserID(userID)
 	if err != nil {
@@ -53,7 +53,7 @@ func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var req todoIDReq
 	if err := httpx.Parse(r, &req); err != nil {
@@ -75,7 +75,7 @@ func (h *TodoHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var pathReq todoIDReq
 	if err := httpx.Parse(r, &pathReq); err != nil {
@@ -103,7 +103,7 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+	userID := middleware.GetUserID(r)
 
 	var req todoIDReq
 	if err := httpx.Parse(r, &req); err != nil {

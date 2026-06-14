@@ -8,12 +8,10 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	userv1 "github.com/wokoworks/go-server/gen/user/v1"
 	"github.com/wokoworks/go-server/internal/config"
+	dbx "github.com/wokoworks/go-server/internal/db"
 	usergrpc "github.com/wokoworks/go-server/internal/user/grpc"
 	"github.com/wokoworks/go-server/internal/user/handler"
 	"github.com/wokoworks/go-server/internal/user/model"
@@ -29,27 +27,17 @@ func main() {
 	validator.Init()
 
 	// Database
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Database.Host, cfg.Database.Port,
-		cfg.Database.User, cfg.Database.Password, cfg.Database.DBName,
-	)
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+	gormDB, err := dbx.New(cfg.Database)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	sqlDB, _ := db.DB()
-	sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
-
-	if err := db.AutoMigrate(&model.User{}, &model.Todo{}); err != nil {
+	if err := gormDB.AutoMigrate(&model.User{}, &model.Todo{}); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
 	// Wire dependencies
-	userRepo := repository.NewUserRepository(db)
-	todoRepo := repository.NewTodoRepository(db)
+	userRepo := repository.NewUserRepository(gormDB)
+	todoRepo := repository.NewTodoRepository(gormDB)
 	userSvc := service.NewUserService(userRepo, cfg.JWT)
 	todoSvc := service.NewTodoService(todoRepo)
 	userHandler := handler.NewUserHandler(userSvc)
