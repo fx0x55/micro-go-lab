@@ -64,8 +64,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_HOST: users-db
-      GRPCCONF_ETCD_HOSTS: "etcd:2379"
-      GRPCCONF_ETCD_KEY: "user-svc.rpc"
+      GRPC_ETCD_HOSTS: "etcd:2379"
+      GRPC_ETCD_KEY: "user-svc.rpc"
 
   order-svc:
     build:

@@ -3,8 +3,8 @@ Host: 0.0.0.0
 Port: 8080
 Mode: dev
 
-GRPCConf:
-  Port: 9090
+GRPC:
+  ListenOn: 0.0.0.0:9090
   Etcd:
     Hosts:
       - localhost:2379

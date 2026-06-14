@@ -56,16 +56,17 @@ func main() {
 	todoHandler := handler.NewTodoHandler(todoSvc)
 
 	// HTTP server
-	httpSrv := rest.MustNewServer(rest.RestConf{
-		ServiceConf: cfg.ServiceConf,
-		Host:        cfg.Host,
-		Port:        cfg.Port,
-	})
+	httpSrv := rest.MustNewServer(cfg.RestConf)
 	defer httpSrv.Stop()
 	registerHTTPRoutes(httpSrv, userHandler, todoHandler, cfg)
 
 	// gRPC server
-	grpcSrv := zrpc.MustNewServer(cfg.GRPCConf.RpcServerConf(cfg.ServiceConf), func(s *grpc.Server) {
+	grpcSrv := zrpc.MustNewServer(zrpc.RpcServerConf{
+		ServiceConf: cfg.ServiceConf,
+		ListenOn:    cfg.GRPC.ListenOn,
+		Etcd:        cfg.GRPC.Etcd,
+		Health:      true,
+	}, func(s *grpc.Server) {
 		userv1.RegisterUserServiceServer(s, usergrpc.NewUserGRPCServer(userSvc))
 	})
 	defer grpcSrv.Stop()

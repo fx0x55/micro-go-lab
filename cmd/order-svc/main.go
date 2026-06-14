@@ -54,11 +54,7 @@ func main() {
 	orderHandler := handler.NewOrderHandler(orderSvc)
 
 	// HTTP server
-	httpSrv := rest.MustNewServer(rest.RestConf{
-		ServiceConf: cfg.ServiceConf,
-		Host:        cfg.Host,
-		Port:        cfg.Port,
-	})
+	httpSrv := rest.MustNewServer(cfg.RestConf)
 	defer httpSrv.Stop()
 	registerHTTPRoutes(httpSrv, orderHandler, cfg)
 

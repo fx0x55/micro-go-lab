@@ -1,36 +1,27 @@
 package config
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/discov"
-	"github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/zrpc"
+	"github.com/zeromicro/go-zero/rest"
 )
 
+// Config 是两个服务共享的配置结构。
+// 内嵌 rest.RestConf 已包含 ServiceConf（Log/Telemetry/Prometheus 等）与 Host/Port，
+// 两个服务直接复用，避免手动拼装 RestConf。
 type Config struct {
-	service.ServiceConf
-	Host     string         `json:",default=0.0.0.0"`
-	Port     int            `json:",default=8080"`
-	GRPCConf GRPCConfig     `json:",optional"`
+	rest.RestConf
+	GRPC     GRPCConfig     `json:",optional"` // 仅 user-svc 监听 gRPC 时使用
 	Database DatabaseConfig
 	JWT      JWTConfig
-	UserSvc  UserSvcConfig `json:",optional"`
+	UserSvc  UserSvcConfig `json:",optional"` // 仅 order-svc 调用 user-svc 时使用
 }
 
+// GRPCConfig 是 gRPC 服务端监听配置，ServiceConf 复用 HTTP 侧的配置
 type GRPCConfig struct {
-	Port int              `json:",default=9090"`
-	Etcd discov.EtcdConf `json:",optional"`
-}
-
-func (c GRPCConfig) RpcServerConf(serviceConf service.ServiceConf) zrpc.RpcServerConf {
-	return zrpc.RpcServerConf{
-		ServiceConf: serviceConf,
-		ListenOn:    fmt.Sprintf(":%d", c.Port),
-		Etcd:        c.Etcd,
-		Health:      true,
-	}
+	ListenOn string          `json:",default=:9090"`
+	Etcd     discov.EtcdConf `json:",optional"`
 }
 
 type DatabaseConfig struct {
