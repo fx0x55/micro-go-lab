@@ -17,9 +17,9 @@ func (r *OrderRepository) Create(order *model.Order) error {
 	return r.db.Create(order).Error
 }
 
-func (r *OrderRepository) FindByID(id uint) (*model.Order, error) {
+func (r *OrderRepository) FindByIDAndUserID(id, userID uint) (*model.Order, error) {
 	var order model.Order
-	err := r.db.First(&order, id).Error
+	err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&order).Error
 	if err != nil {
 		return nil, err
 	}

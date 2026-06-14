@@ -17,9 +17,9 @@ func (r *TodoRepository) Create(todo *model.Todo) error {
 	return r.db.Create(todo).Error
 }
 
-func (r *TodoRepository) FindByID(id uint) (*model.Todo, error) {
+func (r *TodoRepository) FindByIDAndUserID(id, userID uint) (*model.Todo, error) {
 	var todo model.Todo
-	err := r.db.First(&todo, id).Error
+	err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&todo).Error
 	if err != nil {
 		return nil, err
 	}

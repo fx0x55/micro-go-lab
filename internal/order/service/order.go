@@ -55,8 +55,8 @@ func (s *OrderService) Create(ctx context.Context, userID uint, req *CreateOrder
 	return order, nil
 }
 
-func (s *OrderService) GetByID(id uint) (*model.Order, error) {
-	order, err := s.orderRepo.FindByID(id)
+func (s *OrderService) GetByID(userID, id uint) (*model.Order, error) {
+	order, err := s.orderRepo.FindByIDAndUserID(id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
@@ -70,8 +70,8 @@ func (s *OrderService) ListByUserID(userID uint) ([]model.Order, error) {
 	return s.orderRepo.FindByUserID(userID)
 }
 
-func (s *OrderService) UpdateStatus(id uint, req *UpdateOrderStatusRequest) (*model.Order, error) {
-	order, err := s.orderRepo.FindByID(id)
+func (s *OrderService) UpdateStatus(userID, id uint, req *UpdateOrderStatusRequest) (*model.Order, error) {
+	order, err := s.orderRepo.FindByIDAndUserID(id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound

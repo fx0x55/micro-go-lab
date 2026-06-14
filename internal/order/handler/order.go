@@ -45,13 +45,15 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
 	var req orderIDReq
 	if err := httpx.Parse(r, &req); err != nil {
 		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	order, err := h.orderSvc.GetByID(req.ID)
+	order, err := h.orderSvc.GetByID(userID, req.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			middleware.NotFound(w, err.Error())
@@ -77,6 +79,8 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
 	var pathReq orderIDReq
 	if err := httpx.Parse(r, &pathReq); err != nil {
 		middleware.BadRequest(w, "invalid id")
@@ -89,7 +93,7 @@ func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.orderSvc.UpdateStatus(pathReq.ID, &req)
+	order, err := h.orderSvc.UpdateStatus(userID, pathReq.ID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			middleware.NotFound(w, err.Error())

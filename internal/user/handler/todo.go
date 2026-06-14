@@ -53,13 +53,15 @@ func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
 	var req todoIDReq
 	if err := httpx.Parse(r, &req); err != nil {
 		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	todo, err := h.todoSvc.GetByID(req.ID)
+	todo, err := h.todoSvc.GetByID(userID, req.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
 			middleware.NotFound(w, err.Error())
@@ -73,6 +75,8 @@ func (h *TodoHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
 	var pathReq todoIDReq
 	if err := httpx.Parse(r, &pathReq); err != nil {
 		middleware.BadRequest(w, "invalid id")
@@ -85,7 +89,7 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	todo, err := h.todoSvc.Update(pathReq.ID, &req)
+	todo, err := h.todoSvc.Update(userID, pathReq.ID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
 			middleware.NotFound(w, err.Error())
@@ -99,13 +103,15 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
 	var req todoIDReq
 	if err := httpx.Parse(r, &req); err != nil {
 		middleware.BadRequest(w, "invalid id")
 		return
 	}
 
-	if err := h.todoSvc.Delete(req.ID); err != nil {
+	if err := h.todoSvc.Delete(userID, req.ID); err != nil {
 		if errors.Is(err, service.ErrTodoNotFound) {
 			middleware.NotFound(w, err.Error())
 			return

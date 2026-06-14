@@ -38,8 +38,8 @@ func (s *TodoService) Create(userID uint, req *CreateTodoRequest) (*model.Todo, 
 	return todo, nil
 }
 
-func (s *TodoService) GetByID(id uint) (*model.Todo, error) {
-	todo, err := s.todoRepo.FindByID(id)
+func (s *TodoService) GetByID(userID, id uint) (*model.Todo, error) {
+	todo, err := s.todoRepo.FindByIDAndUserID(id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTodoNotFound
@@ -53,8 +53,8 @@ func (s *TodoService) ListByUserID(userID uint) ([]model.Todo, error) {
 	return s.todoRepo.FindByUserID(userID)
 }
 
-func (s *TodoService) Update(id uint, req *UpdateTodoRequest) (*model.Todo, error) {
-	todo, err := s.todoRepo.FindByID(id)
+func (s *TodoService) Update(userID, id uint, req *UpdateTodoRequest) (*model.Todo, error) {
+	todo, err := s.todoRepo.FindByIDAndUserID(id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTodoNotFound
@@ -75,9 +75,8 @@ func (s *TodoService) Update(id uint, req *UpdateTodoRequest) (*model.Todo, erro
 	return todo, nil
 }
 
-func (s *TodoService) Delete(id uint) error {
-	_, err := s.todoRepo.FindByID(id)
-	if err != nil {
+func (s *TodoService) Delete(userID, id uint) error {
+	if _, err := s.todoRepo.FindByIDAndUserID(id, userID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrTodoNotFound
 		}
