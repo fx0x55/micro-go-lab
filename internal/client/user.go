@@ -28,7 +28,7 @@ func NewUserClient(cfg config.UserSvcConfig) *UserClient {
 		Endpoints: cfg.Endpoints,
 		Timeout:   cfg.Timeout,
 		NonBlock:  true,
-	})
+	}, zrpc.WithUnaryClientInterceptor(retryUnaryInterceptor))
 	return &UserClient{
 		client: userv1.NewUserServiceClient(cli.Conn()),
 		conn:   cli.Conn(),
