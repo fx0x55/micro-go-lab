@@ -11,6 +11,12 @@ import (
 	"github.com/wokoworks/go-server/internal/config"
 )
 
+// UserSummary 是 ValidateUser 返回的用户摘要，包含存在性与用户名
+type UserSummary struct {
+	Exists   bool
+	Username string
+}
+
 type UserClient struct {
 	client userv1.UserServiceClient
 	conn   *grpc.ClientConn
@@ -29,15 +35,15 @@ func NewUserClient(cfg config.UserSvcConfig) *UserClient {
 	}
 }
 
-func (c *UserClient) ValidateUser(ctx context.Context, userID uint) (bool, error) {
+func (c *UserClient) ValidateUser(ctx context.Context, userID uint) (*UserSummary, error) {
 	resp, err := c.client.ValidateUser(ctx, &userv1.ValidateUserRequest{
 		UserId: uint64(userID),
 	})
 	if err != nil {
 		logx.Error("gRPC ValidateUser failed", logx.Field("error", err))
-		return false, err
+		return nil, err
 	}
-	return resp.Exists, nil
+	return &UserSummary{Exists: resp.Exists, Username: resp.Username}, nil
 }
 
 func (c *UserClient) GetUser(ctx context.Context, userID uint) (*userv1.GetUserResponse, error) {

@@ -18,6 +18,7 @@ message ValidateUserRequest {
 
 message ValidateUserResponse {
   bool exists = 1;
+  string username = 2; // 用户存在时返回用户名，供调用方避免二次查询
 }
 
 message GetUserRequest {

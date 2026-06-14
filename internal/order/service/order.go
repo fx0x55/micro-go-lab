@@ -43,11 +43,11 @@ type UpdateOrderStatusRequest struct {
 
 func (s *OrderService) Create(ctx context.Context, userID uint, req *CreateOrderRequest) (*model.Order, error) {
 	// 通过 gRPC 验证用户是否存在
-	exists, err := s.userCli.ValidateUser(ctx, userID)
+	summary, err := s.userCli.ValidateUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	if !summary.Exists {
 		return nil, ErrUserNotFound
 	}
 
