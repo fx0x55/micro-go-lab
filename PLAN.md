@@ -74,6 +74,22 @@
 
 ---
 
+## 阶段四补充二：go-zero 标准 Monorepo 布局迁移 [已完成]
+
+将项目从通用 `cmd/` + `internal/` 结构迁移到 go-zero 官方推荐的 monorepo 布局：
+
+- [x] user-svc 拆分为独立的 **user-api**（HTTP）和 **user-rpc**（gRPC）两个二进制
+- [x] 共享代码提取到 `common/`（middleware, xdb, client, model, validator, telemetry）
+- [x] 引入 **ServiceContext** 模式替代手动 DI（`internal/svc/servicecontext.go`）
+- [x] handler → logic 分层：handler 变为薄适配器，logic 承载业务逻辑（一个 endpoint 一个文件）
+- [x] 配置分层：`common/config/types.go` 共享类型 + per-service Config
+- [x] YAML 配置从 `config/` 迁移到各服务的 `etc/` 目录
+- [x] Proto 源文件从 `proto/` 迁移到 `api/`，生成代码从 `gen/` 迁移到 `service/user/rpc/pb/`
+- [x] 部署配置从 `deployments/` 迁移到 `deploy/`
+- [x] 更新 Makefile、Dockerfile、docker-compose.yml、CLAUDE.md
+
+---
+
 ## 阶段五：容器化与编排 [待开始]
 
 - [ ] Kubernetes Deployment/Service/Ingress YAML
@@ -112,28 +128,35 @@
 
 ## 项目结构
 
+采用 go-zero 标准 monorepo 布局：
+
 ```
-go-server/
-├── proto/                  # gRPC 服务定义（user.proto）
-├── gen/                    # protoc 生成代码（gitignored）
-├── cmd/
-│   ├── user-svc/           # 用户服务入口（main.go + routes.go）
-│   └── order-svc/          # 订单服务入口（main.go + routes.go）
-├── internal/
-│   ├── user/               # user-svc 业务（handler/service/repository/model/grpc）
-│   ├── order/              # order-svc 业务（handler/service/repository/model）
-│   ├── client/             # gRPC 客户端封装（user.go + retry.go 重试拦截器）
-│   ├── config/             # 共用 Config 结构 + ApplyEnvOverrides
-│   ├── db/                 # 数据库连接 + goose 迁移（migrations/{user,order}/）
-│   ├── middleware/         # 共用中间件（response/auth/health）
-│   ├── validator/          # validator/v10 适配 httpx.SetValidator
-│   └── telemetry/          # OpenTelemetry 初始化（OTLP → Jaeger）
-├── deployments/
-│   ├── prometheus.yml      # Prometheus 抓取配置
-│   └── grafana/            # Grafana 数据源 provisioning
-├── config/                 # YAML 配置文件（user-svc.yaml / order-svc.yaml）
-├── Dockerfile              # 多目标构建
-├── docker-compose.yml      # 编排（etcd + 2 DB + 2 Service + Prometheus + Grafana + Jaeger）
+micro-go-lab/
+├── api/user/v1/              # Proto 定义（user.proto）
+├── common/                   # 跨服务共享包
+│   ├── config/               # 共享配置类型（DatabaseConfig, JWTConfig 等）
+│   ├── middleware/            # 响应封装、JWT 解析、健康检查
+│   ├── xdb/                  # GORM 连接 + goose 迁移（migrations/{user,order}/）
+│   ├── client/               # gRPC 客户端封装 + 重试拦截器
+│   ├── model/                # 共享 GORM 模型（User, Todo, Order）
+│   ├── validator/            # validator/v10 适配 httpx.SetValidator
+│   └── telemetry/            # OpenTelemetry 初始化（OTLP → Jaeger）
+├── service/
+│   ├── user/
+│   │   ├── api/              # user-api（HTTP :8080）
+│   │   │   ├── etc/          # user-api.yaml
+│   │   │   └── internal/     # config/handler/logic/svc/types/repository
+│   │   └── rpc/              # user-rpc（gRPC :9090）
+│   │       ├── etc/          # user-rpc.yaml
+│   │       ├── internal/     # config/logic/server/svc/repository
+│   │       └── pb/           # protoc 生成代码（gitignored）
+│   └── order/
+│       └── api/              # order-api（HTTP :8081）
+│           ├── etc/          # order-api.yaml
+│           └── internal/     # config/handler/logic/svc/types/repository
+├── deploy/                   # 基础设施配置（Prometheus, Grafana）
+├── Dockerfile                # 多目标构建（user-api, user-rpc, order-api）
+├── docker-compose.yml        # 编排（etcd + 2 DB + 3 Service + Prometheus + Grafana + Jaeger）
 ├── Makefile
-└── PLAN.md                 # 项目学习计划
+└── PLAN.md
 ```

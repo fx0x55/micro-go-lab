@@ -50,13 +50,12 @@ services:
       retries: 5
 
   # === Services ===
-  user-svc:
+  user-api:
     build:
       context: .
-      target: user-svc
+      target: user-api
     ports:
       - "8080:8080"
-      - "9090:9090"
       - "9101:9101"
     depends_on:
       users-db:
@@ -65,22 +64,37 @@ services:
         condition: service_healthy
     environment:
       DATABASE_HOST: users-db
-      GRPC_ETCD_HOSTS: "etcd:2379"
-      GRPC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       OTLP_ENDPOINT: jaeger:4317
 
-  order-svc:
+  user-rpc:
     build:
       context: .
-      target: order-svc
+      target: user-rpc
+    ports:
+      - "9090:9090"
+    depends_on:
+      users-db:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: users-db
+      ETCD_HOSTS: "etcd:2379"
+      ETCD_KEY: "user-svc.rpc"
+      OTLP_ENDPOINT: jaeger:4317
+
+  order-api:
+    build:
+      context: .
+      target: order-api
     ports:
       - "8081:8081"
       - "9102:9102"
     depends_on:
       orders-db:
         condition: service_healthy
-      user-svc:
+      user-rpc:
         condition: service_started
     environment:
       DATABASE_HOST: orders-db
@@ -95,7 +109,7 @@ services:
     ports:
       - "9091:9090"
     volumes:
-      - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -104,7 +118,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
-      - ./deployments/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
 

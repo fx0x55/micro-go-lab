@@ -1,0 +1,32 @@
+Name: order-api
+Host: 0.0.0.0
+Port: 8081
+Mode: dev
+
+Database:
+  Host: localhost
+  Port: 5433
+  User: postgres
+  Password: postgres
+  DBName: orders_db
+  MaxOpenConns: 25
+  MaxIdleConns: 10
+
+UserSvc:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: user-svc.rpc
+  Timeout: 2000
+
+JWT:
+  Secret: change-me-in-production
+  Expiration: 24h
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9102
+  Path: /metrics
+
+Telemetry:
+  OTLPEndpoint: localhost:4317

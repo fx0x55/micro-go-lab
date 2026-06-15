@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "github.com/wokoworks/go-server/service/user/rpc/pb;pb";
+
+// UserService 提供给其他微服务调用的 gRPC 接口
+service UserService {
+  // ValidateUser 验证用户是否存在
+  rpc ValidateUser(ValidateUserRequest) returns (ValidateUserResponse);
+  // GetUser 获取用户信息
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+}
+
+message ValidateUserRequest {
+  uint64 user_id = 1;
+}
+
+message ValidateUserResponse {
+  bool exists = 1;
+  string username = 2; // 用户存在时返回用户名，供调用方避免二次查询
+}
+
+message GetUserRequest {
+  uint64 user_id = 1;
+}
+
+message GetUserResponse {
+  uint64 id = 1;
+  string username = 2;
+  string email = 3;
+}
