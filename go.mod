@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/zeromicro/go-zero v1.10.2
 	go.opentelemetry.io/otel v1.44.0
