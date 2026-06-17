@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go build -o /user-rpc ./service/user/rpc
 FROM builder AS build-order-api
 RUN CGO_ENABLED=0 go build -o /order-api ./service/order/api
 
-FROM alpine:3.19 AS user-api
+FROM alpine:3.21 AS user-api
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=build-user-api /user-api .
@@ -21,7 +21,7 @@ COPY service/user/api/etc/ ./etc/
 EXPOSE 8080
 CMD ["./user-api"]
 
-FROM alpine:3.19 AS user-rpc
+FROM alpine:3.21 AS user-rpc
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=build-user-rpc /user-rpc .
@@ -29,7 +29,7 @@ COPY service/user/rpc/etc/ ./etc/
 EXPOSE 9090
 CMD ["./user-rpc"]
 
-FROM alpine:3.19 AS order-api
+FROM alpine:3.21 AS order-api
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=build-order-api /order-api .

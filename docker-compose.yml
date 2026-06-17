@@ -1,7 +1,7 @@
 services:
   # === Infrastructure ===
   etcd:
-    image: gcr.io/etcd-development/etcd:v3.5.21
+    image: gcr.io/etcd-development/etcd:v3.5.31
     command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379
     ports:
       - "2379:2379"
@@ -18,7 +18,7 @@ services:
 
   # === Databases ===
   users-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -26,7 +26,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - users-db-data:/var/lib/postgresql/data
+      - users-db-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -34,7 +34,7 @@ services:
       retries: 5
 
   orders-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -42,7 +42,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - orders-db-data:/var/lib/postgresql/data
+      - orders-db-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -105,14 +105,14 @@ services:
 
   # === Monitoring ===
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:v3.5.3
     ports:
       - "9091:9090"
     volumes:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:13.0.2
     ports:
       - "3000:3000"
     environment:
@@ -123,12 +123,11 @@ services:
       - prometheus
 
   jaeger:
-    image: jaegertracing/all-in-one:1.58
+    image: jaegertracing/jaeger:2.19.0
     ports:
-      - "16686:16686"  # Jaeger UI
-      - "4317:4317"    # OTLP gRPC
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
 
 volumes:
   users-db-data:
