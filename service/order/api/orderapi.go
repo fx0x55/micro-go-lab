@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/rest"
 
-	"github.com/wokoworks/go-server/common/telemetry"
 	"github.com/wokoworks/go-server/common/validator"
 	"github.com/wokoworks/go-server/service/order/api/internal/config"
 	"github.com/wokoworks/go-server/service/order/api/internal/handler"
@@ -25,12 +23,6 @@ func main() {
 	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
 	validator.Init()
-
-	shutdown, err := telemetry.Init(cfg.Name, cfg.Telemetry.OTLPEndpoint)
-	if err != nil {
-		panic(fmt.Sprintf("failed to init telemetry: %v", err))
-	}
-	defer shutdown(context.Background())
 
 	svcCtx := svc.NewServiceContext(cfg)
 	defer svcCtx.UserCli.Close()

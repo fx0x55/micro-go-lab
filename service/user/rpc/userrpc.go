@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 
@@ -10,7 +9,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/wokoworks/go-server/common/telemetry"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/config"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/server"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
@@ -26,12 +24,6 @@ func main() {
 	conf.MustLoad(*configFile, &cfg)
 	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
-
-	shutdown, err := telemetry.Init(cfg.Name, cfg.Telemetry.OTLPEndpoint)
-	if err != nil {
-		panic(fmt.Sprintf("failed to init telemetry: %v", err))
-	}
-	defer shutdown(context.Background())
 
 	svcCtx := svc.NewServiceContext(cfg)
 

@@ -57,13 +57,12 @@ service/{name}/{api|rpc}/
 ```
 
 **Shared packages (common/):**
-- `common/config` — shared config types (`DatabaseConfig`, `JWTConfig`, `TelemetryConfig`, `UserSvcConfig`)
+- `common/config` — shared config types (`DatabaseConfig`, `JWTConfig`, `UserSvcConfig`)
 - `common/xdb` — GORM connection (`New`) + goose SQL migrations (`Migrate`, files embedded under `migrations/{user,order}/`)
 - `common/middleware` — JSON response helpers (`OkJson`/`CreatedJson`/`BadRequest`/...), `GetUserID` (JWT context), `HealthHandler` (DB ping → 503 on failure)
 - `common/client` — gRPC client wrapper (order-api → user-rpc) + exponential-backoff retry interceptor
 - `common/model` — shared GORM model structs (User, Todo, Order)
 - `common/validator` — `go-playground/validator` adapted to go-zero `httpx.SetValidator`
-- `common/telemetry` — OpenTelemetry init (OTLP → Jaeger)
 
 ### Service interactions
 
@@ -81,6 +80,25 @@ service/{name}/{api|rpc}/
 - **Config**: YAML files in `etc/` per service; secrets and deploy-specific values injected via `ApplyEnvOverrides` reading `os.Getenv`
 - **Database**: PostgreSQL via GORM; schema managed by **goose** SQL migrations (embedded via `go:embed`, run automatically at startup in `common/xdb/migrate.go`)
 - **Proto source** in `api/user/v1/`; generated code in `service/user/rpc/pb/` (gitignored, regenerate with `make proto`)
+
+### Distributed tracing (OpenTelemetry → Jaeger)
+
+Tracing is handled entirely by go-zero's built-in OTel integration — no custom middleware or interceptors needed.
+
+- **TracerProvider lifecycle**: `ServiceConf.SetUp()` (called via `cfg.MustSetUp()` in each service's `main()`) initializes the global `TracerProvider` with an OTLP gRPC exporter and registers W3C TraceContext + Baggage propagators. Shutdown is registered via `proc.AddShutdownListener`.
+- **HTTP spans**: go-zero's `TraceHandler` middleware is enabled by default (`Middlewares.Trace: true` in `RestConf`) — creates a server span per request, extracts/injects trace context via headers.
+- **gRPC server spans**: go-zero's `UnaryTracingInterceptor` / `StreamTracingInterceptor` are enabled by default (`Middlewares.Trace: true` in `RpcServerConf`) — creates a server span per RPC, extracts context from gRPC metadata.
+- **gRPC client spans**: go-zero's client `UnaryTracingInterceptor` is enabled by default (`Middlewares.Trace: true` in `RpcClientConf`) — creates a client span per outgoing call, injects context into gRPC metadata. The order-api → user-rpc calls automatically propagate trace context.
+- **Config**: each service's YAML has a `Telemetry` section (go-zero's `trace.Config`):
+  ```yaml
+  Telemetry:
+    Endpoint: localhost:4317  # OTLP gRPC collector (Jaeger)
+    Sampler: 1.0              # 100% sampling
+    Batcher: otlpgrpc         # exporter type
+  ```
+- **Env override**: `OTLP_ENDPOINT` env var maps to `cfg.Telemetry.Endpoint` via each service's `ApplyEnvOverrides()`. Docker compose sets `OTLP_ENDPOINT: jaeger:4317`.
+- **Jaeger UI**: `localhost:16686` (docker). Search by service name: `user-api`, `user-rpc`, `order-api`.
+- **Grafana**: Jaeger is provisioned as a datasource at `http://jaeger:16686`.
 
 ### Databases
 

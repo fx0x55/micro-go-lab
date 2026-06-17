@@ -10,9 +10,8 @@ import (
 
 type Config struct {
 	rest.RestConf
-	Database  config.DatabaseConfig
-	JWT       config.JWTConfig
-	Telemetry config.TelemetryConfig `json:",optional"`
+	Database config.DatabaseConfig
+	JWT      config.JWTConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -20,7 +19,7 @@ func (c *Config) ApplyEnvOverrides() {
 		c.JWT.Secret = s
 	}
 	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
-		c.Telemetry.OTLPEndpoint = s
+		c.Telemetry.Endpoint = s
 	}
 	if s := os.Getenv("DATABASE_HOST"); s != "" {
 		c.Database.Host = s

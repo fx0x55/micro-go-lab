@@ -29,4 +29,6 @@ Prometheus:
   Path: /metrics
 
 Telemetry:
-  OTLPEndpoint: localhost:4317
+  Endpoint: localhost:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc

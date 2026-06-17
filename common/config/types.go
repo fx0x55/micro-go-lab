@@ -14,11 +14,6 @@ type GRPCConfig struct {
 	Etcd     discov.EtcdConf `json:",optional"`
 }
 
-// TelemetryConfig 是 OpenTelemetry 链路追踪配置
-type TelemetryConfig struct {
-	OTLPEndpoint string `json:",optional"`
-}
-
 type DatabaseConfig struct {
 	Host         string `json:",default=localhost"`
 	Port         int    `json:",default=5432"`

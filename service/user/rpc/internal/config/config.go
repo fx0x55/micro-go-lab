@@ -10,13 +10,12 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Database  config.DatabaseConfig
-	Telemetry config.TelemetryConfig `json:",optional"`
+	Database config.DatabaseConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
-		c.Telemetry.OTLPEndpoint = s
+		c.Telemetry.Endpoint = s
 	}
 	if s := os.Getenv("DATABASE_HOST"); s != "" {
 		c.Database.Host = s
