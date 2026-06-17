@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/zeromicro/go-zero/zrpc"
 
@@ -19,6 +20,11 @@ func (c *Config) ApplyEnvOverrides() {
 	}
 	if s := os.Getenv("DATABASE_HOST"); s != "" {
 		c.Database.Host = s
+	}
+	if s := os.Getenv("DATABASE_PORT"); s != "" {
+		if port, err := strconv.Atoi(s); err == nil {
+			c.Database.Port = port
+		}
 	}
 	if hosts := config.EnvList("ETCD_HOSTS"); len(hosts) > 0 {
 		c.Etcd.Hosts = hosts

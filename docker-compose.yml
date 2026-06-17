@@ -17,32 +17,18 @@ services:
       retries: 5
 
   # === Databases ===
-  users-db:
+  postgres:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: users_db
+      POSTGRES_EXTRA_DBS: orders_db
     ports:
       - "5432:5432"
     volumes:
-      - users-db-data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  orders-db:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: orders_db
-    ports:
-      - "5433:5432"
-    volumes:
-      - orders-db-data:/var/lib/postgresql
+      - pg-data:/var/lib/postgresql
+      - ./deploy/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -58,12 +44,12 @@ services:
       - "8080:8080"
       - "9101:9101"
     depends_on:
-      users-db:
+      postgres:
         condition: service_healthy
       etcd:
         condition: service_healthy
     environment:
-      DATABASE_HOST: users-db
+      DATABASE_HOST: postgres
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       OTLP_ENDPOINT: jaeger:4317
 
@@ -74,12 +60,12 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      users-db:
+      postgres:
         condition: service_healthy
       etcd:
         condition: service_healthy
     environment:
-      DATABASE_HOST: users-db
+      DATABASE_HOST: postgres
       ETCD_HOSTS: "etcd:2379"
       ETCD_KEY: "user-svc.rpc"
       OTLP_ENDPOINT: jaeger:4317
@@ -92,12 +78,12 @@ services:
       - "8081:8081"
       - "9102:9102"
     depends_on:
-      orders-db:
+      postgres:
         condition: service_healthy
       user-rpc:
         condition: service_started
     environment:
-      DATABASE_HOST: orders-db
+      DATABASE_HOST: postgres
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
@@ -130,5 +116,4 @@ services:
       - "4318:4318" # OTLP HTTP
 
 volumes:
-  users-db-data:
-  orders-db-data:
+  pg-data:

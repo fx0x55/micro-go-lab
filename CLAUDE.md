@@ -20,7 +20,7 @@ go test ./service/user/api/internal/logic/... -v
 # Single test
 go test ./service/user/api/internal/logic/... -v -run TestName
 
-# Full stack via Docker (etcd, postgres x2, user-api, user-rpc, order-api, prometheus, grafana, jaeger)
+# Full stack via Docker (etcd, postgres, user-api, user-rpc, order-api, prometheus, grafana, jaeger)
 make docker-up
 make docker-down
 
@@ -102,5 +102,6 @@ Tracing is handled entirely by go-zero's built-in OTel integration — no custom
 
 ### Databases
 
-- `users_db` (port 5432) — user-api/user-rpc models: User, Todo
-- `orders_db` (port 5433) — order-api models: Order (Amount is int64, in cents/fen)
+Single PostgreSQL instance with two databases:
+- `users_db` — user-api/user-rpc models: User, Todo
+- `orders_db` — order-api models: Order (Amount is int64, in cents/fen)
