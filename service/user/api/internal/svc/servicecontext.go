@@ -2,9 +2,11 @@ package svc
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/wokoworks/go-server/common/xdb"
 	"github.com/wokoworks/go-server/service/user/api/internal/config"
+	"github.com/wokoworks/go-server/service/user/api/internal/event"
 	"github.com/wokoworks/go-server/service/user/api/internal/repository"
 	"gorm.io/gorm"
 )
@@ -14,6 +16,10 @@ type ServiceContext struct {
 	DB       *gorm.DB
 	UserRepo repository.UserRepositoryInterface
 	TodoRepo repository.TodoRepositoryInterface
+	Outbox   *event.Outbox
+	EventBus event.EventBus
+	Consumer *event.Consumer
+	Poller   *event.Poller
 }
 
 func NewServiceContext(c *config.Config) *ServiceContext {
@@ -25,10 +31,24 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
+	// 初始化事件系统
+	eventBus := event.NewChannelEventBus(100)
+	outbox := event.NewOutbox(eventBus)
+	consumer := event.NewConsumer(eventBus)
+	poller := event.NewPoller(outbox, 5*time.Second)
+
+	// 启动消费者和轮询器
+	consumer.Start()
+	poller.Start()
+
 	return &ServiceContext{
 		Config:   *c,
 		DB:       gormDB,
 		UserRepo: repository.NewUserRepository(gormDB),
 		TodoRepo: repository.NewTodoRepository(gormDB),
+		Outbox:   outbox,
+		EventBus: eventBus,
+		Consumer: consumer,
+		Poller:   poller,
 	}
 }

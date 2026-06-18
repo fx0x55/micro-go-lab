@@ -10,6 +10,7 @@ import (
 	"github.com/wokoworks/go-server/common/config"
 	"github.com/wokoworks/go-server/common/ecode"
 	"github.com/wokoworks/go-server/common/model"
+	"github.com/wokoworks/go-server/service/user/api/internal/event"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
 	"github.com/wokoworks/go-server/service/user/api/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -63,6 +64,14 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 		}
 		return nil, err
 	}
+
+	// 用户注册成功后，保存事件到Outbox（异步创建欢迎待办）
+	outboxEvent := event.NewEvent(event.UserRegistered, map[string]any{
+		"user_id":  user.ID,
+		"username": user.Username,
+	})
+	l.svcCtx.Outbox.Add(outboxEvent)
+
 	return user, nil
 }
 
