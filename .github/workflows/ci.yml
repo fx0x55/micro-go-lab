@@ -54,3 +54,7 @@ jobs:
         with:
           file: coverage.out
         if: github.event_name == 'push'
+
+      - name: Build Docker image
+        run: docker build --target user-api -t user-api:${{ github.sha }} .
+        if: github.event_name == 'push'
