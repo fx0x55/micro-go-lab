@@ -66,14 +66,20 @@ func ListOrderHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r)
 
+		var req types.ListOrderRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			middleware.BadRequest(w, err.Error())
+			return
+		}
+
 		l := logic.NewListOrderLogic(r.Context(), svcCtx)
-		orders, err := l.ListByUserID(userID)
+		result, err := l.ListByUserID(userID, req.Page, req.PageSize)
 		if err != nil {
 			middleware.InternalError(w, "failed to list orders")
 			return
 		}
 
-		middleware.OkJson(w, orders)
+		middleware.OkJson(w, result)
 	}
 }
 

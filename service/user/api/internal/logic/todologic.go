@@ -7,6 +7,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 
+	"github.com/wokoworks/go-server/common/page"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
 	"github.com/wokoworks/go-server/service/user/api/internal/types"
@@ -53,8 +54,12 @@ func NewListTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListTodo
 	}
 }
 
-func (l *ListTodoLogic) ListByUserID(userID uint) ([]model.Todo, error) {
-	return l.svcCtx.TodoRepo.FindByUserID(userID)
+func (l *ListTodoLogic) ListByUserID(userID uint, pg, pageSize int) (*page.Result, error) {
+	todos, total, err := l.svcCtx.TodoRepo.FindByUserIDWithPage(userID, (pg-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	return page.NewResult(todos, total, pg, pageSize), nil
 }
 
 type GetTodoLogic struct {

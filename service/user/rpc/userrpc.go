@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -26,6 +27,12 @@ func main() {
 	cfg.MustSetUp()
 
 	svcCtx := svc.NewServiceContext(cfg)
+
+	proc.AddShutdownListener(func() {
+		if sqlDB, err := svcCtx.DB.DB(); err == nil {
+			sqlDB.Close()
+		}
+	})
 
 	s := zrpc.MustNewServer(cfg.RpcServerConf, func(grpcServer *grpc.Server) {
 		userv1.RegisterUserServiceServer(grpcServer, server.NewUserServiceServer(svcCtx))

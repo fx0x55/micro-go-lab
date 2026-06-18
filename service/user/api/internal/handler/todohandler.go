@@ -37,14 +37,20 @@ func ListTodoHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := middleware.GetUserID(r)
 
+		var req types.ListTodoRequest
+		if err := httpx.Parse(r, &req); err != nil {
+			middleware.BadRequest(w, err.Error())
+			return
+		}
+
 		l := logic.NewListTodoLogic(r.Context(), svcCtx)
-		todos, err := l.ListByUserID(userID)
+		result, err := l.ListByUserID(userID, req.Page, req.PageSize)
 		if err != nil {
 			middleware.InternalError(w, "failed to list todos")
 			return
 		}
 
-		middleware.OkJson(w, todos)
+		middleware.OkJson(w, result)
 	}
 }
 

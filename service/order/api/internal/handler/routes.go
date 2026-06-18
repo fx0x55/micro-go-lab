@@ -10,6 +10,8 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
+	server.Use(middleware.CorsMiddleware)
+
 	// Health check
 	server.AddRoute(rest.Route{
 		Method:  http.MethodGet,

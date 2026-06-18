@@ -7,6 +7,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 
+	"github.com/wokoworks/go-server/common/page"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/service/order/api/internal/svc"
 	"github.com/wokoworks/go-server/service/order/api/internal/types"
@@ -98,8 +99,12 @@ func NewListOrderLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListOrd
 	}
 }
 
-func (l *ListOrderLogic) ListByUserID(userID uint) ([]model.Order, error) {
-	return l.svcCtx.OrderRepo.FindByUserID(userID)
+func (l *ListOrderLogic) ListByUserID(userID uint, pg, pageSize int) (*page.Result, error) {
+	orders, total, err := l.svcCtx.OrderRepo.FindByUserIDWithPage(userID, (pg-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	return page.NewResult(orders, total, pg, pageSize), nil
 }
 
 type UpdateOrderStatusLogic struct {

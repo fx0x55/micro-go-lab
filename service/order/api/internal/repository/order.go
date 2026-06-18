@@ -32,6 +32,19 @@ func (r *OrderRepository) FindByUserID(userID uint) ([]model.Order, error) {
 	return orders, err
 }
 
+func (r *OrderRepository) FindByUserIDWithPage(userID uint, offset, limit int) ([]model.Order, int64, error) {
+	var orders []model.Order
+	var total int64
+
+	db := r.db.Model(&model.Order{}).Where("user_id = ?", userID)
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&orders).Error
+	return orders, total, err
+}
+
 func (r *OrderRepository) Update(order *model.Order) error {
 	return r.db.Save(order).Error
 }

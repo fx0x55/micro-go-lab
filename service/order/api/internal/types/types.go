@@ -12,3 +12,8 @@ type UpdateOrderStatusRequest struct {
 type OrderIDReq struct {
 	ID uint `path:"id"`
 }
+
+type ListOrderRequest struct {
+	Page     int `form:"page,default=1" validate:"min=1"`
+	PageSize int `form:"page_size,default=20" validate:"min=1,max=100"`
+}

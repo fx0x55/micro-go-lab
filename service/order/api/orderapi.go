@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/rest"
 
 	"github.com/wokoworks/go-server/common/validator"
@@ -25,7 +26,13 @@ func main() {
 	validator.Init()
 
 	svcCtx := svc.NewServiceContext(cfg)
-	defer svcCtx.UserCli.Close()
+
+	proc.AddShutdownListener(func() {
+		svcCtx.UserCli.Close()
+		if sqlDB, err := svcCtx.DB.DB(); err == nil {
+			sqlDB.Close()
+		}
+	})
 
 	httpSrv := rest.MustNewServer(cfg.RestConf)
 	defer httpSrv.Stop()

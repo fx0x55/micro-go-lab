@@ -32,6 +32,19 @@ func (r *TodoRepository) FindByUserID(userID uint) ([]model.Todo, error) {
 	return todos, err
 }
 
+func (r *TodoRepository) FindByUserIDWithPage(userID uint, offset, limit int) ([]model.Todo, int64, error) {
+	var todos []model.Todo
+	var total int64
+
+	db := r.db.Model(&model.Todo{}).Where("user_id = ?", userID)
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&todos).Error
+	return todos, total, err
+}
+
 func (r *TodoRepository) Update(todo *model.Todo) error {
 	return r.db.Save(todo).Error
 }
