@@ -34,7 +34,11 @@ func (r *TodoRepository) FindByUserID(ctx context.Context, userID uint) ([]model
 	return todos, err
 }
 
-func (r *TodoRepository) FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Todo, int64, error) {
+func (r *TodoRepository) FindByUserIDWithPage(
+	ctx context.Context,
+	userID uint,
+	offset, limit int,
+) ([]model.Todo, int64, error) {
 	var todos []model.Todo
 	var total int64
 

@@ -1,0 +1,116 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    # --- Default set (baseline) ---
+    - errcheck        # check unchecked error return values
+    - govet           # go vet checks, suspicious code constructs
+    - ineffassign     # detect ineffective assignments
+    - misspell        # spelling mistakes (auto-fix)
+    - revive          # golint replacement, more flexible and configurable
+    - staticcheck     # static analysis superset, covers many rules
+    - unused          # unused code
+
+    # --- Error handling ---
+    - errorlint       # detect unsafe error comparisons, use errors.Is/As
+    - errname         # enforce ErrFoo/FooError naming convention
+    # - wrapcheck       # external package errors must be wrapped to preserve stack
+    - nilerr          # detect if err != nil { return nil, nil } logic bugs
+
+    # --- Security ---
+    - gosec           # security vulnerability scanning (hardcoded keys, SQL injection, weak crypto, etc.)
+    - bodyclose       # check HTTP response body is properly closed
+
+    # --- Code quality ---
+    - gocritic        # hundreds of code quality, performance, style rules
+    - unconvert       # remove unnecessary type conversions
+    - prealloc        # suggest preallocating slices for performance
+    - goconst         # find duplicated strings, suggest extracting constants
+    - unparam         # report unused function parameters
+
+    # --- Modern Go (1.22+) ---
+    - modernize       # suggest modern Go features (slices/maps/min/max etc.)
+    - intrange        # use for i := range n instead of for i:=0; i<n; i++
+    - copyloopvar     # detect unnecessary loop variable copies
+
+    # --- Consistency & hygiene ---
+    - gocyclo         # detect cyclomatic complexity, keep functions readable
+    - dupword         # detect duplicate words ("the the")
+    - nakedret        # disallow bare returns in long functions
+    - perfsprint      # suggest faster alternatives to fmt.Sprintf
+
+    - contextcheck
+    - testifylint
+    - rowserrcheck
+    - sqlclosecheck
+    - whitespace
+
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+        # - experimental
+      disabled-checks:
+        - unnamedResult
+        - unnecessaryBlock
+    gocyclo:
+      min-complexity: 15
+    goconst:
+      min-len: 3
+      min-occurrences: 4
+    gosec:
+      excludes:
+        - G104 # audit errors not checked (errcheck already covers this)
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: blank-imports
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+
+  exclusions:
+    generated: lax
+    rules:
+      # relax some checks in test files
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - gosec
+          - wrapcheck
+          - dupword
+          - revive
+      # go-zero uses custom json tag options (default, optional) for config loading
+      - path: common/config/types\.go
+        linters:
+          - staticcheck
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+    - golines
+  settings:
+    gofumpt:
+      module-path: micro-go-lab
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(micro-go-lab)
+      custom-order: true
+    golines:
+      max-len: 120
+      shorten-comments: true

@@ -34,7 +34,11 @@ func (r *OrderRepository) FindByUserID(ctx context.Context, userID uint) ([]mode
 	return orders, err
 }
 
-func (r *OrderRepository) FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error) {
+func (r *OrderRepository) FindByUserIDWithPage(
+	ctx context.Context,
+	userID uint,
+	offset, limit int,
+) ([]model.Order, int64, error) {
 	var orders []model.Order
 	var total int64
 

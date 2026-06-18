@@ -34,8 +34,8 @@ type DatabaseConfig struct {
 	User         string
 	Password     string
 	DBName       string
-	MaxOpenConns int           `json:",default=25"`
-	MaxIdleConns int           `json:",default=10"`
+	MaxOpenConns int `json:",default=25"`
+	MaxIdleConns int `json:",default=10"`
 	// ConnMaxLifetime 限制单个连接的最长存活时间，防止连接老化
 	// （DB 重启 / LB 轮换 / NAT 超时后陈旧连接）。
 	ConnMaxLifetime time.Duration `json:",default=30m"`

@@ -1,4 +1,4 @@
-.PHONY: run-user-api run-user-rpc run-order-api build test clean docker-up docker-down proto
+.PHONY: run-user-api run-user-rpc run-order-api build test clean docker-up docker-down proto lint install-lint
 
 run-user-api:
 	go run ./service/user/api
@@ -34,3 +34,23 @@ docker-up:
 
 docker-down:
 	docker compose down -v
+
+install-lint:
+	@if ! command -v golangci-lint &> /dev/null; then \
+		echo "golangci-lint not found, installing v2.12.2..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2; \
+	else \
+		CURRENT_VERSION=$$(golangci-lint version --short 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown"); \
+		if [ "$$CURRENT_VERSION" != "2.12.2" ]; then \
+			echo "golangci-lint version $$CURRENT_VERSION found, but v2.12.2 is required. Upgrading..."; \
+			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2; \
+		else \
+			echo "golangci-lint v2.12.2 is already installed"; \
+		fi \
+	fi
+
+lint: install-lint
+	golangci-lint run ./...
+
+format: install-lint
+	golangci-lint run --fix ./...

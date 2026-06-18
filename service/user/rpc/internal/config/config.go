@@ -5,9 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/zeromicro/go-zero/zrpc"
-
 	"github.com/wokoworks/go-server/common/config"
+	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {

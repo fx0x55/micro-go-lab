@@ -7,15 +7,14 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/zeromicro/go-zero/core/logx"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-
 	"github.com/wokoworks/go-server/common/config"
 	"github.com/wokoworks/go-server/common/ecode"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
 	"github.com/wokoworks/go-server/service/user/api/internal/types"
+	"github.com/zeromicro/go-zero/core/logx"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // 保留向后兼容的别名（供 handler 使用 logic.ErrXxx）
@@ -23,6 +22,7 @@ var (
 	ErrUserExists         = ecode.ErrUserExists
 	ErrInvalidCredentials = ecode.ErrInvalidCredentials
 )
+
 type RegisterLogic struct {
 	logx.Logger
 	ctx    context.Context
@@ -80,7 +80,7 @@ func NewLoginLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LoginLogic 
 	}
 }
 
-func (l *LoginLogic) Login(req *types.LoginRequest) (map[string]interface{}, *model.User, error) {
+func (l *LoginLogic) Login(req *types.LoginRequest) (map[string]any, *model.User, error) {
 	user, err := l.svcCtx.UserRepo.FindByUsername(l.ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -98,7 +98,7 @@ func (l *LoginLogic) Login(req *types.LoginRequest) (map[string]interface{}, *mo
 		return nil, nil, err
 	}
 
-	return map[string]interface{}{"token": token}, user, nil
+	return map[string]any{"token": token}, user, nil
 }
 
 func generateToken(user *model.User, jwtCfg config.JWTConfig) (string, error) {

@@ -2,13 +2,11 @@ package handler
 
 import (
 	"net/http"
-
-	"github.com/zeromicro/go-zero/rest"
-
-	"github.com/wokoworks/go-server/common/middleware"
 	"time"
 
+	"github.com/wokoworks/go-server/common/middleware"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
@@ -18,8 +16,8 @@ func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
 
 	// Health check
 	server.AddRoute(rest.Route{
-		Method:  http.MethodGet,
-		Path:    "/health",
+		Method: http.MethodGet,
+		Path:   "/health",
 		Handler: middleware.HealthHandler("user-api", func() error {
 			sqlDB, err := svcCtx.DB.DB()
 			if err != nil {

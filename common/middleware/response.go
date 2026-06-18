@@ -7,12 +7,12 @@ import (
 )
 
 type Response struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
-func OkJson(w http.ResponseWriter, data interface{}) {
+func OkJson(w http.ResponseWriter, data any) {
 	httpx.OkJson(w, Response{
 		Code:    0,
 		Message: "ok",
@@ -20,7 +20,7 @@ func OkJson(w http.ResponseWriter, data interface{}) {
 	})
 }
 
-func CreatedJson(w http.ResponseWriter, data interface{}) {
+func CreatedJson(w http.ResponseWriter, data any) {
 	httpx.WriteJson(w, http.StatusCreated, Response{
 		Code:    0,
 		Message: "created",

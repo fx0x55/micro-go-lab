@@ -3,16 +3,15 @@ package client
 import (
 	"testing"
 
-	"github.com/zeromicro/go-zero/core/discov"
-
 	"github.com/wokoworks/go-server/common/config"
+	"github.com/zeromicro/go-zero/core/discov"
 )
 
 // 回归测试：防止 buildRpcClientConf 漏掉 conf.FillDefault，
 // 否则 Middlewares.Trace 为零值 false，order-api → user-rpc 的 gRPC 客户端
 // 不会挂载 tracing/breaker/timeout 拦截器，链路追踪会在此断裂。
 func TestBuildRpcClientConfEnablesTracing(t *testing.T) {
-	c := buildRpcClientConf(config.UserSvcConfig{
+	c := buildRpcClientConf(&config.UserSvcConfig{
 		Etcd:    discov.EtcdConf{Hosts: []string{"127.0.0.1:2379"}, Key: "user-svc.rpc"},
 		Timeout: 2000,
 	})

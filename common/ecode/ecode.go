@@ -3,18 +3,18 @@ package ecode
 // 统一业务错误码，所有服务共用。
 // 格式: 服务前缀(2位) + 模块(2位) + 序号(2位)
 
-type Code struct {
+type CodeError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-func (c *Code) Error() string { return c.Message }
+func (c *CodeError) Error() string { return c.Message }
 
-func New(code int, msg string) *Code { return &Code{Code: code, Message: msg} }
+func New(code int, msg string) *CodeError { return &CodeError{Code: code, Message: msg} }
 
 // 通用错误码 1xxxxx
 var (
-	OK              = &Code{0, "ok"}
+	OK              = &CodeError{0, "ok"}
 	ErrParam        = New(100001, "invalid parameter")
 	ErrUnauthorized = New(100002, "unauthorized")
 	ErrNotFound     = New(100003, "resource not found")

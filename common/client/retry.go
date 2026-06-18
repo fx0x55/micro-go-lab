@@ -15,9 +15,16 @@ const (
 )
 
 // retryUnaryInterceptor 对临时性错误按指数退避重试
-func retryUnaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func retryUnaryInterceptor(
+	ctx context.Context,
+	method string,
+	req, reply any,
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
 	var lastErr error
-	for i := 0; i < maxRetryAttempts; i++ {
+	for i := range maxRetryAttempts {
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err == nil {
 			return nil

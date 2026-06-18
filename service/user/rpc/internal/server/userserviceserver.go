@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/logic"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
+	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 )
 
 type UserServiceServer struct {
@@ -17,7 +17,10 @@ func NewUserServiceServer(svcCtx *svc.ServiceContext) *UserServiceServer {
 	return &UserServiceServer{svcCtx: svcCtx}
 }
 
-func (s *UserServiceServer) ValidateUser(ctx context.Context, req *userv1.ValidateUserRequest) (*userv1.ValidateUserResponse, error) {
+func (s *UserServiceServer) ValidateUser(
+	ctx context.Context,
+	req *userv1.ValidateUserRequest,
+) (*userv1.ValidateUserResponse, error) {
 	l := logic.NewValidateUserLogic(ctx, s.svcCtx)
 	return l.ValidateUser(req)
 }

@@ -4,14 +4,13 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/logx"
-	"gorm.io/gorm"
-
 	"github.com/wokoworks/go-server/common/client"
 	"github.com/wokoworks/go-server/common/xdb"
 	"github.com/wokoworks/go-server/common/xredis"
 	"github.com/wokoworks/go-server/service/order/api/internal/config"
 	"github.com/wokoworks/go-server/service/order/api/internal/repository"
+	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 type ServiceContext struct {
@@ -22,8 +21,8 @@ type ServiceContext struct {
 	Redis     *redis.Client // 用于下单幂等；为 nil 时退化为不做幂等。
 }
 
-func NewServiceContext(c config.Config) *ServiceContext {
-	gormDB, err := xdb.New(c.Database)
+func NewServiceContext(c *config.Config) *ServiceContext {
+	gormDB, err := xdb.New(&c.Database)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
@@ -31,7 +30,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
-	userCli := client.NewUserClient(c.UserSvc)
+	userCli := client.NewUserClient(&c.UserSvc)
 
 	var redisClient *redis.Client
 	if c.Redis.Host != "" {
@@ -42,7 +41,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:    c,
+		Config:    *c,
 		DB:        gormDB,
 		OrderRepo: repository.NewOrderRepository(gormDB),
 		UserCli:   userCli,

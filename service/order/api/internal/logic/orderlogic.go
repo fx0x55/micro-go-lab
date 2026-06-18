@@ -9,15 +9,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/logx"
-	"gorm.io/gorm"
-
 	"github.com/wokoworks/go-server/common/ecode"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/common/page"
 	"github.com/wokoworks/go-server/common/xmetrics"
 	"github.com/wokoworks/go-server/service/order/api/internal/svc"
 	"github.com/wokoworks/go-server/service/order/api/internal/types"
+	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 // 保留向后兼容的别名
@@ -51,7 +50,11 @@ func NewCreateOrderLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 	}
 }
 
-func (l *CreateOrderLogic) Create(userID uint, req *types.CreateOrderRequest, idempotencyKey string) (*model.Order, error) {
+func (l *CreateOrderLogic) Create(
+	userID uint,
+	req *types.CreateOrderRequest,
+	idempotencyKey string,
+) (*model.Order, error) {
 	// 幂等闸门：带 Idempotency-Key 且 Redis 可用时启用。无 key 或无 Redis → 行为不变。
 	gateKey := ""
 	if idempotencyKey != "" && l.svcCtx.Redis != nil {
@@ -190,7 +193,10 @@ func NewUpdateOrderStatusLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 	}
 }
 
-func (l *UpdateOrderStatusLogic) UpdateStatus(userID, id uint, req *types.UpdateOrderStatusRequest) (*model.Order, error) {
+func (l *UpdateOrderStatusLogic) UpdateStatus(
+	userID, id uint,
+	req *types.UpdateOrderStatusRequest,
+) (*model.Order, error) {
 	order, err := l.svcCtx.OrderRepo.FindByIDAndUserID(l.ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

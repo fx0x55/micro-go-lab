@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"strconv"
 
+	"github.com/wokoworks/go-server/common/xcache"
+	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
+	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-
-	"github.com/wokoworks/go-server/common/xcache"
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
-	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
 )
 
 // userSummary 是 ValidateUser 的缓存载荷。Cache 在 ServiceContext 中以
@@ -38,7 +37,7 @@ func NewValidateUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Vali
 }
 
 func (l *ValidateUserLogic) ValidateUser(req *userv1.ValidateUserRequest) (*userv1.ValidateUserResponse, error) {
-	summary, err := xcache.GetOrLoad(l.ctx, l.svcCtx.Cache, fmt.Sprint(req.UserId),
+	summary, err := xcache.GetOrLoad(l.ctx, l.svcCtx.Cache, strconv.FormatUint(req.UserId, 10),
 		func(s userSummary) ([]byte, error) { return json.Marshal(s) },
 		func(b []byte) (userSummary, error) {
 			var s userSummary

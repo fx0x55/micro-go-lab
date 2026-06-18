@@ -4,14 +4,13 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/logx"
-	"gorm.io/gorm"
-
 	"github.com/wokoworks/go-server/common/xcache"
-	"github.com/wokoworks/go-server/common/xredis"
 	"github.com/wokoworks/go-server/common/xdb"
+	"github.com/wokoworks/go-server/common/xredis"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/config"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/repository"
+	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 type ServiceContext struct {
@@ -22,8 +21,8 @@ type ServiceContext struct {
 	Cache    *xcache.Cache
 }
 
-func NewServiceContext(c config.Config) *ServiceContext {
-	gormDB, err := xdb.New(c.Database)
+func NewServiceContext(c *config.Config) *ServiceContext {
+	gormDB, err := xdb.New(&c.Database)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
@@ -41,7 +40,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:   c,
+		Config:   *c,
 		DB:       gormDB,
 		UserRepo: repository.NewUserRepository(gormDB),
 		Redis:    redisClient,

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/wokoworks/go-server/common/config"
 )
@@ -42,10 +43,5 @@ func CorsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func isAllowedOrigin(origin string, allowed []string) bool {
-	for _, a := range allowed {
-		if origin == a {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, origin)
 }

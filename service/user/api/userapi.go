@@ -4,15 +4,14 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/zeromicro/go-zero/core/conf"
-	"github.com/zeromicro/go-zero/core/proc"
-	"github.com/zeromicro/go-zero/rest"
-
 	commonconfig "github.com/wokoworks/go-server/common/config"
 	"github.com/wokoworks/go-server/common/validator"
 	"github.com/wokoworks/go-server/service/user/api/internal/config"
 	"github.com/wokoworks/go-server/service/user/api/internal/handler"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
+	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/proc"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 var configFile = flag.String("f", "etc/user-api.yaml", "the config file")
@@ -29,11 +28,11 @@ func main() {
 	cfg.MustSetUp()
 	validator.Init()
 
-	svcCtx := svc.NewServiceContext(cfg)
+	svcCtx := svc.NewServiceContext(&cfg)
 
 	proc.AddShutdownListener(func() {
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 

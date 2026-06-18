@@ -4,12 +4,11 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/zeromicro/go-zero/rest/httpx"
-
 	"github.com/wokoworks/go-server/common/middleware"
 	"github.com/wokoworks/go-server/service/user/api/internal/logic"
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
 	"github.com/wokoworks/go-server/service/user/api/internal/types"
+	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func RegisterHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {

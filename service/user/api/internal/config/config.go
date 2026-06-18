@@ -4,9 +4,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/zeromicro/go-zero/rest"
-
 	"github.com/wokoworks/go-server/common/config"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 type Config struct {

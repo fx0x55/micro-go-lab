@@ -5,14 +5,13 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/wokoworks/go-server/common/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"github.com/wokoworks/go-server/common/config"
 )
 
 // New 初始化 PostgreSQL 连接并设置连接池参数
-func New(cfg config.DatabaseConfig) (*gorm.DB, error) {
+func New(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 	// sslmode 为空时回退到 disable，保留本地开发默认；生产经 env 配置为 require/verify-full。
 	sslmode := cfg.SSLMode
 	if sslmode == "" {

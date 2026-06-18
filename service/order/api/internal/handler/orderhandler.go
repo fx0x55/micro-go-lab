@@ -4,12 +4,11 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/zeromicro/go-zero/rest/httpx"
-
 	"github.com/wokoworks/go-server/common/middleware"
 	"github.com/wokoworks/go-server/service/order/api/internal/logic"
 	"github.com/wokoworks/go-server/service/order/api/internal/svc"
 	"github.com/wokoworks/go-server/service/order/api/internal/types"
+	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func CreateOrderHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {

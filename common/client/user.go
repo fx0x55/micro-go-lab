@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"github.com/wokoworks/go-server/common/config"
+	"github.com/wokoworks/go-server/common/xmetrics"
+	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 	"github.com/zeromicro/go-zero/core/breaker"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
-
-	"github.com/wokoworks/go-server/common/config"
-	"github.com/wokoworks/go-server/common/xmetrics"
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 )
 
 type UserSummary struct {
@@ -33,7 +32,7 @@ type UserClient struct {
 // order-api → user-rpc 的链路追踪、熔断与超时会随之失效。
 // 不能用 conf.FillDefault 补默认值——它要求整个结构体为空（Etcd/Timeout 已赋值时会 panic），
 // 因此这里显式把 Middlewares 各项置 true，与 RpcServerConf 经 conf.MustLoad 后的默认行为一致。
-func buildRpcClientConf(cfg config.UserSvcConfig) zrpc.RpcClientConf {
+func buildRpcClientConf(cfg *config.UserSvcConfig) zrpc.RpcClientConf {
 	return zrpc.RpcClientConf{
 		Etcd:      cfg.Etcd,
 		Endpoints: cfg.Endpoints,
@@ -49,7 +48,7 @@ func buildRpcClientConf(cfg config.UserSvcConfig) zrpc.RpcClientConf {
 	}
 }
 
-func NewUserClient(cfg config.UserSvcConfig) *UserClient {
+func NewUserClient(cfg *config.UserSvcConfig) *UserClient {
 	cli := zrpc.MustNewClient(buildRpcClientConf(cfg), zrpc.WithUnaryClientInterceptor(retryUnaryInterceptor))
 	return &UserClient{
 		client: userv1.NewUserServiceClient(cli.Conn()),

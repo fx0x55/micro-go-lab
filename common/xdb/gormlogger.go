@@ -2,6 +2,7 @@ package xdb
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"time"
 
@@ -34,36 +35,39 @@ func (g *gormLogxLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface
 	return &newLogger
 }
 
-func (g *gormLogxLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+func (g *gormLogxLogger) Info(ctx context.Context, msg string, data ...any) {
 	if g.level >= gormlogger.Info {
 		logx.WithContext(ctx).Infof(msg, data...)
 	}
 }
 
-func (g *gormLogxLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+func (g *gormLogxLogger) Warn(ctx context.Context, msg string, data ...any) {
 	if g.level >= gormlogger.Warn {
 		logx.WithContext(ctx).Slowf(msg, data...)
 	}
 }
 
-func (g *gormLogxLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+func (g *gormLogxLogger) Error(ctx context.Context, msg string, data ...any) {
 	if g.level >= gormlogger.Error {
 		logx.WithContext(ctx).Errorf(msg, data...)
 	}
 }
 
-func (g *gormLogxLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+func (g *gormLogxLogger) Trace(
+	ctx context.Context,
+	begin time.Time,
+	fc func() (sql string, rowsAffected int64),
+	err error,
+) {
 	if g.level <= gormlogger.Silent {
 		return
 	}
 
 	elapsed := time.Since(begin)
-	sql := ""
-	rows := int64(-1)
 
 	switch {
 	case err != nil && g.level >= gormlogger.Error && !isRecordNotFound(err):
-		sql, rows = fc()
+		sql, rows := fc()
 		logx.WithContext(ctx).Errorw("slow/error sql",
 			logx.Field("elapsed", elapsed.String()),
 			logx.Field("rows", rows),
@@ -71,7 +75,7 @@ func (g *gormLogxLogger) Trace(ctx context.Context, begin time.Time, fc func() (
 			logx.Field("error", err.Error()),
 		)
 	case g.slowThreshold > 0 && elapsed > g.slowThreshold && g.level >= gormlogger.Warn:
-		sql, rows = fc()
+		sql, rows := fc()
 		logx.WithContext(ctx).Sloww("slow sql",
 			logx.Field("elapsed", elapsed.String()),
 			logx.Field("rows", rows),
@@ -87,5 +91,5 @@ func redactSQL(sql string) string {
 }
 
 func isRecordNotFound(err error) bool {
-	return err == gorm.ErrRecordNotFound
+	return errors.Is(err, gorm.ErrRecordNotFound)
 }
