@@ -2,33 +2,33 @@ package event
 
 // EventBus 定义事件总线接口
 type EventBus interface {
-	Publish(event Event)
-	Subscribe(handler func(Event))
+	Publish(event *Event)
+	Subscribe(handler func(*Event))
 	Close()
 }
 
 // ChannelEventBus 使用channel实现的事件总线
 type ChannelEventBus struct {
-	ch         chan Event
-	subscriber func(Event)
+	ch         chan *Event
+	subscriber func(*Event)
 	done       chan struct{}
 }
 
 // NewChannelEventBus 创建新的ChannelEventBus
 func NewChannelEventBus(bufferSize int) *ChannelEventBus {
 	return &ChannelEventBus{
-		ch:   make(chan Event, bufferSize),
+		ch:   make(chan *Event, bufferSize),
 		done: make(chan struct{}),
 	}
 }
 
 // Publish 发布事件到总线
-func (eb *ChannelEventBus) Publish(event Event) {
+func (eb *ChannelEventBus) Publish(event *Event) {
 	eb.ch <- event
 }
 
 // Subscribe 订阅事件
-func (eb *ChannelEventBus) Subscribe(handler func(Event)) {
+func (eb *ChannelEventBus) Subscribe(handler func(*Event)) {
 	eb.subscriber = handler
 	go eb.startConsumer()
 }

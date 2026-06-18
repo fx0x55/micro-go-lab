@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/wokoworks/go-server/common/middleware"
-	"github.com/wokoworks/go-server/service/order/api/internal/logic"
-	"github.com/wokoworks/go-server/service/order/api/internal/svc"
-	"github.com/wokoworks/go-server/service/order/api/internal/types"
+	"github.com/fx0x55/micro-go-lab/common/middleware"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/logic"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/types"
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 

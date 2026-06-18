@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/wokoworks/go-server/common/config"
+	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wokoworks/go-server/common/xdb"
-	"github.com/wokoworks/go-server/service/user/api/internal/config"
-	"github.com/wokoworks/go-server/service/user/api/internal/event"
-	"github.com/wokoworks/go-server/service/user/api/internal/repository"
+	"github.com/fx0x55/micro-go-lab/common/xdb"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/event"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/repository"
 	"gorm.io/gorm"
 )
 

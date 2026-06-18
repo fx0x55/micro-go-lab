@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/wokoworks/go-server/common/xcache"
-	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
+	"github.com/fx0x55/micro-go-lab/common/xcache"
+	"github.com/fx0x55/micro-go-lab/service/user/rpc/internal/svc"
+	userv1 "github.com/fx0x55/micro-go-lab/service/user/rpc/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

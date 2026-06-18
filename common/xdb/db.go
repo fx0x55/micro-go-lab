@@ -3,9 +3,9 @@ package xdb
 import (
 	"fmt"
 
+	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/wokoworks/go-server/common/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/wokoworks/go-server/common/ecode"
-	"github.com/wokoworks/go-server/common/model"
-	"github.com/wokoworks/go-server/common/page"
-	"github.com/wokoworks/go-server/service/user/api/internal/svc"
-	"github.com/wokoworks/go-server/service/user/api/internal/types"
+	"github.com/fx0x55/micro-go-lab/common/ecode"
+	"github.com/fx0x55/micro-go-lab/common/model"
+	"github.com/fx0x55/micro-go-lab/common/page"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )

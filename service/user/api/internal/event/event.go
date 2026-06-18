@@ -16,7 +16,7 @@ type Event struct {
 	Payload   any       `json:"payload"`
 	Status    string    `json:"status"` // "pending", "sent", "failed"
 	CreatedAt time.Time `json:"created_at"`
-	SentAt    time.Time `json:"sent_at,omitempty"`
+	SentAt    time.Time `json:"sent_at,omitzero"`
 }
 
 // NewEvent 创建新事件

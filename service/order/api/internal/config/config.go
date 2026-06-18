@@ -4,7 +4,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/wokoworks/go-server/common/config"
+	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/zeromicro/go-zero/rest"
 )
 

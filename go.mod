@@ -1,4 +1,4 @@
-module github.com/wokoworks/go-server
+module github.com/fx0x55/micro-go-lab
 
 go 1.26.2
 

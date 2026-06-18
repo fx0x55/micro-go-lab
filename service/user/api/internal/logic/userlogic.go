@@ -5,14 +5,14 @@ import (
 	"errors"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/config"
+	"github.com/fx0x55/micro-go-lab/common/ecode"
+	"github.com/fx0x55/micro-go-lab/common/model"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/event"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/wokoworks/go-server/common/config"
-	"github.com/wokoworks/go-server/common/ecode"
-	"github.com/wokoworks/go-server/common/model"
-	"github.com/wokoworks/go-server/service/user/api/internal/event"
-	"github.com/wokoworks/go-server/service/user/api/internal/svc"
-	"github.com/wokoworks/go-server/service/user/api/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -70,7 +70,7 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 		"user_id":  user.ID,
 		"username": user.Username,
 	})
-	l.svcCtx.Outbox.Add(outboxEvent)
+	l.svcCtx.Outbox.Add(&outboxEvent)
 
 	return user, nil
 }

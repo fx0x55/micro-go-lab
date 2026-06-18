@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/model"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/mocks"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gorm.io/gorm"
-
-	"github.com/wokoworks/go-server/common/model"
-	"github.com/wokoworks/go-server/service/user/api/internal/config"
-	"github.com/wokoworks/go-server/service/user/api/internal/mocks"
-	"github.com/wokoworks/go-server/service/user/api/internal/svc"
-	"github.com/wokoworks/go-server/service/user/api/internal/types"
 )
+
+const testTodoTitle = "Test Todo"
 
 func TestCreateTodoLogic_Create(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -30,7 +31,7 @@ func TestCreateTodoLogic_Create(t *testing.T) {
 	testTodo := &model.Todo{
 		ID:        1,
 		UserID:    1,
-		Title:     "Test Todo",
+		Title:     testTodoTitle,
 		Completed: false,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -47,7 +48,7 @@ func TestCreateTodoLogic_Create(t *testing.T) {
 		{
 			name:   "创建成功",
 			userID: 1,
-			req:    &types.CreateTodoRequest{Title: "Test Todo"},
+			req:    &types.CreateTodoRequest{Title: testTodoTitle},
 			mockSetup: func() {
 				mockTodoRepo.EXPECT().
 					Create(gomock.Any(), gomock.Any()).
@@ -73,7 +74,7 @@ func TestCreateTodoLogic_Create(t *testing.T) {
 			todo, err := logic.Create(tt.userID, tt.req)
 
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, todo)
 				return
 			}
@@ -99,7 +100,7 @@ func TestGetTodoLogic_GetByID(t *testing.T) {
 	testTodo := &model.Todo{
 		ID:        1,
 		UserID:    1,
-		Title:     "Test Todo",
+		Title:     testTodoTitle,
 		Completed: false,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -149,7 +150,7 @@ func TestGetTodoLogic_GetByID(t *testing.T) {
 			todo, err := logic.GetByID(tt.userID, tt.todoID)
 
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, todo)
 				return
 			}
@@ -208,7 +209,7 @@ func TestListTodoLogic_ListByUserID(t *testing.T) {
 			result, err := logic.ListByUserID(tt.userID, tt.page, tt.pageSize)
 
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, result)
 				return
 			}
@@ -315,7 +316,7 @@ func TestUpdateTodoLogic_Update(t *testing.T) {
 			todo, err := logic.Update(tt.userID, tt.todoID, tt.req)
 
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
+				require.ErrorIs(t, err, tt.expectedErr)
 				assert.Nil(t, todo)
 				return
 			}
@@ -341,7 +342,7 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 	testTodo := &model.Todo{
 		ID:     1,
 		UserID: 1,
-		Title:  "Test Todo",
+		Title:  testTodoTitle,
 	}
 
 	tests := []struct {
@@ -392,7 +393,7 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 			err := logic.Delete(tt.userID, tt.todoID)
 
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
 

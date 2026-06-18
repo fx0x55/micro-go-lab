@@ -23,13 +23,13 @@ func NewOutbox(eventBus EventBus) *Outbox {
 }
 
 // Add 添加事件到Outbox
-func (o *Outbox) Add(event Event) {
+func (o *Outbox) Add(event *Event) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	event.ID = o.nextID
 	o.nextID++
-	o.events = append(o.events, event)
+	o.events = append(o.events, *event)
 }
 
 // GetPending 获取所有待处理的事件
@@ -79,7 +79,7 @@ func (o *Outbox) PublishPending() int {
 	published := 0
 
 	for _, event := range pending {
-		o.eventBus.Publish(event)
+		o.eventBus.Publish(&event)
 		o.MarkAsSent(event.ID)
 		published++
 	}

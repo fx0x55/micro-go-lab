@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/wokoworks/go-server/common/model"
+	"github.com/fx0x55/micro-go-lab/common/model"
 	"gorm.io/gorm"
 )
 

@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 
-	"github.com/wokoworks/go-server/service/user/rpc/internal/logic"
-	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
+	"github.com/fx0x55/micro-go-lab/service/user/rpc/internal/logic"
+	"github.com/fx0x55/micro-go-lab/service/user/rpc/internal/svc"
+	userv1 "github.com/fx0x55/micro-go-lab/service/user/rpc/pb"
 )
 
 type UserServiceServer struct {

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wokoworks/go-server/common/middleware"
-	"github.com/wokoworks/go-server/service/user/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/common/middleware"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
 	"github.com/zeromicro/go-zero/rest"
 )
 

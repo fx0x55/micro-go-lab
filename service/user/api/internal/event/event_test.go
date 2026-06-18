@@ -9,16 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testUserIDKey = "user_id"
+
 func TestOutbox_Add(t *testing.T) {
 	eventBus := NewChannelEventBus(10)
 	outbox := NewOutbox(eventBus)
 
 	// 测试添加事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	outbox.Add(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	outbox.Add(&event1)
 
-	event2 := NewEvent(UserRegistered, map[string]any{"user_id": 2})
-	outbox.Add(event2)
+	event2 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 2})
+	outbox.Add(&event2)
 
 	// 验证事件被正确添加
 	pending := outbox.GetPending()
@@ -38,15 +40,15 @@ func TestOutbox_MarkAsSent(t *testing.T) {
 	outbox := NewOutbox(eventBus)
 
 	// 添加事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	outbox.Add(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	outbox.Add(&event1)
 
 	// 标记为已发送
 	outbox.MarkAsSent(1)
 
 	// 验证事件状态已更新
 	pending := outbox.GetPending()
-	assert.Len(t, pending, 0, "不应该有待处理事件")
+	assert.Empty(t, pending, "不应该有待处理事件")
 
 	// 验证事件被标记为已发送（需要直接访问events slice）
 	outbox.mu.RLock()
@@ -60,15 +62,15 @@ func TestOutbox_MarkAsFailed(t *testing.T) {
 	outbox := NewOutbox(eventBus)
 
 	// 添加事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	outbox.Add(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	outbox.Add(&event1)
 
 	// 标记为失败
 	outbox.MarkAsFailed(1)
 
 	// 验证事件状态已更新
 	pending := outbox.GetPending()
-	assert.Len(t, pending, 0, "不应该有待处理事件")
+	assert.Empty(t, pending, "不应该有待处理事件")
 
 	// 验证事件被标记为失败
 	outbox.mu.RLock()
@@ -81,22 +83,22 @@ func TestOutbox_PublishPending(t *testing.T) {
 	outbox := NewOutbox(eventBus)
 
 	// 记录发布的事件
-	var publishedEvents []Event
+	var publishedEvents []*Event
 	var mu sync.Mutex
 
 	// 订阅事件
-	eventBus.Subscribe(func(event Event) {
+	eventBus.Subscribe(func(event *Event) {
 		mu.Lock()
 		defer mu.Unlock()
 		publishedEvents = append(publishedEvents, event)
 	})
 
 	// 添加事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	outbox.Add(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	outbox.Add(&event1)
 
-	event2 := NewEvent(UserRegistered, map[string]any{"user_id": 2})
-	outbox.Add(event2)
+	event2 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 2})
+	outbox.Add(&event2)
 
 	// 发布待处理事件
 	published := outbox.PublishPending()
@@ -112,7 +114,7 @@ func TestOutbox_PublishPending(t *testing.T) {
 
 	// 验证所有事件都被标记为已发送
 	pending := outbox.GetPending()
-	assert.Len(t, pending, 0, "不应该有待处理事件")
+	assert.Empty(t, pending, "不应该有待处理事件")
 }
 
 func TestOutbox_ConcurrentAccess(t *testing.T) {
@@ -123,12 +125,12 @@ func TestOutbox_ConcurrentAccess(t *testing.T) {
 	numEvents := 100
 
 	// 并发添加事件
-	for i := 0; i < numEvents; i++ {
+	for i := range numEvents {
 		wg.Add(1)
 		go func(userID int) {
 			defer wg.Done()
-			event := NewEvent(UserRegistered, map[string]any{"user_id": userID})
-			outbox.Add(event)
+			event := NewEvent(UserRegistered, map[string]any{testUserIDKey: userID})
+			outbox.Add(&event)
 		}(i)
 	}
 
@@ -149,22 +151,22 @@ func TestOutbox_ConcurrentAccess(t *testing.T) {
 func TestEventBus_PublishSubscribe(t *testing.T) {
 	eventBus := NewChannelEventBus(10)
 
-	var receivedEvents []Event
+	var receivedEvents []*Event
 	var mu sync.Mutex
 
 	// 订阅事件
-	eventBus.Subscribe(func(event Event) {
+	eventBus.Subscribe(func(event *Event) {
 		mu.Lock()
 		defer mu.Unlock()
 		receivedEvents = append(receivedEvents, event)
 	})
 
 	// 发布事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	eventBus.Publish(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	eventBus.Publish(&event1)
 
-	event2 := NewEvent(UserRegistered, map[string]any{"user_id": 2})
-	eventBus.Publish(event2)
+	event2 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 2})
+	eventBus.Publish(&event2)
 
 	// 等待事件被消费
 	time.Sleep(100 * time.Millisecond)
@@ -186,15 +188,15 @@ func TestPoller_StartStop(t *testing.T) {
 	poller.Start()
 
 	// 添加事件
-	event1 := NewEvent(UserRegistered, map[string]any{"user_id": 1})
-	outbox.Add(event1)
+	event1 := NewEvent(UserRegistered, map[string]any{testUserIDKey: 1})
+	outbox.Add(&event1)
 
 	// 等待轮询器处理
 	time.Sleep(200 * time.Millisecond)
 
 	// 验证事件被发布（通过检查Outbox状态）
 	pending := outbox.GetPending()
-	assert.Len(t, pending, 0, "事件应该已经被发布")
+	assert.Empty(t, pending, "事件应该已经被发布")
 
 	// 停止轮询器
 	poller.Stop()

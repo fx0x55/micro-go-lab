@@ -24,7 +24,7 @@ func (c *Consumer) Start() {
 }
 
 // handleEvent 处理事件
-func (c *Consumer) handleEvent(event Event) {
+func (c *Consumer) handleEvent(event *Event) {
 	switch event.Type {
 	case UserRegistered:
 		c.handleUserRegistered(event)
@@ -34,7 +34,7 @@ func (c *Consumer) handleEvent(event Event) {
 }
 
 // handleUserRegistered 处理用户注册事件
-func (c *Consumer) handleUserRegistered(event Event) {
+func (c *Consumer) handleUserRegistered(event *Event) {
 	// 将payload转换为JSON
 	payloadBytes, err := json.Marshal(event.Payload)
 	if err != nil {

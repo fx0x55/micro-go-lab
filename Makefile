@@ -22,12 +22,12 @@ clean:
 
 proto:
 	protoc --go_out=. --go-grpc_out=. \
-	  --go_opt=module=github.com/wokoworks/go-server \
-	  --go-grpc_opt=module=github.com/wokoworks/go-server \
+	  --go_opt=module=github.com/fx0x55/micro-go-lab \
+	  --go-grpc_opt=module=github.com/fx0x55/micro-go-lab \
 	  api/user/v1/user.proto
 	mv api/user/v1/*.go service/user/rpc/pb/
 	@sed -i '' 's/^package userv1$$/package pb/' service/user/rpc/pb/user.pb.go service/user/rpc/pb/user_grpc.pb.go
-	@sed -i '' 's|"github.com/wokoworks/go-server/gen/user/v1"|"github.com/wokoworks/go-server/service/user/rpc/pb"|g' service/user/rpc/pb/user_grpc.pb.go
+	@sed -i '' 's|"github.com/fx0x55/micro-go-lab/gen/user/v1"|"github.com/fx0x55/micro-go-lab/service/user/rpc/pb"|g' service/user/rpc/pb/user_grpc.pb.go
 
 docker-up:
 	docker compose up -d --build

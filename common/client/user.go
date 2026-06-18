@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/wokoworks/go-server/common/config"
-	"github.com/wokoworks/go-server/common/xmetrics"
-	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
+	"github.com/fx0x55/micro-go-lab/common/config"
+	"github.com/fx0x55/micro-go-lab/common/xmetrics"
+	userv1 "github.com/fx0x55/micro-go-lab/service/user/rpc/pb"
 	"github.com/zeromicro/go-zero/core/breaker"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"

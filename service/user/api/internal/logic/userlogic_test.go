@@ -5,19 +5,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/config"
+	"github.com/fx0x55/micro-go-lab/common/model"
+	localconfig "github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/mocks"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
+	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-
-	"github.com/wokoworks/go-server/common/config"
-	"github.com/wokoworks/go-server/common/model"
-	localconfig "github.com/wokoworks/go-server/service/user/api/internal/config"
-	"github.com/wokoworks/go-server/service/user/api/internal/mocks"
-	"github.com/wokoworks/go-server/service/user/api/internal/svc"
-	"github.com/wokoworks/go-server/service/user/api/internal/types"
 )
 
 func TestLoginLogic_Login(t *testing.T) {
@@ -131,7 +130,7 @@ func TestLoginLogic_Login(t *testing.T) {
 
 			// 验证错误
 			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr, "错误应该匹配预期")
+				require.ErrorIs(t, err, tt.expectedErr, "错误应该匹配预期")
 				assert.Nil(t, tokenMap, "token应该为nil")
 				assert.Nil(t, user, "user应该为nil")
 				return
@@ -148,7 +147,7 @@ func TestLoginLogic_Login(t *testing.T) {
 				require.True(t, ok, "token应该是字符串")
 
 				// 解析并验证JWT token
-				token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+				token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (any, error) {
 					return []byte(jwtConfig.Secret), nil
 				})
 				require.NoError(t, err, "token应该可以解析")
@@ -157,7 +156,7 @@ func TestLoginLogic_Login(t *testing.T) {
 				// 验证token claims
 				claims, ok := token.Claims.(jwt.MapClaims)
 				require.True(t, ok, "claims应该是MapClaims")
-				assert.Equal(t, float64(testUser.ID), claims["user_id"], "user_id应该匹配")
+				assert.InDelta(t, float64(testUser.ID), claims["user_id"], 0.001, "user_id应该匹配")
 				assert.Equal(t, testUser.Username, claims["username"], "username应该匹配")
 			}
 

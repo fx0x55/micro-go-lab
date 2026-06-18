@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/wokoworks/go-server/common/config"
+	"github.com/fx0x55/micro-go-lab/common/config"
 )
 
 // NewCorsMiddleware 返回根据 CORSConfig 配置的 CORS 中间件。

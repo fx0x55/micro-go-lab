@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/redis/go-redis/v9"
-	"github.com/wokoworks/go-server/common/config"
 )
 
 // New 创建 Redis 客户端并验证连接。

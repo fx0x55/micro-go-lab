@@ -3,12 +3,12 @@ package svc
 import (
 	"fmt"
 
+	"github.com/fx0x55/micro-go-lab/common/client"
+	"github.com/fx0x55/micro-go-lab/common/xdb"
+	"github.com/fx0x55/micro-go-lab/common/xredis"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/config"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/repository"
 	"github.com/redis/go-redis/v9"
-	"github.com/wokoworks/go-server/common/client"
-	"github.com/wokoworks/go-server/common/xdb"
-	"github.com/wokoworks/go-server/common/xredis"
-	"github.com/wokoworks/go-server/service/order/api/internal/config"
-	"github.com/wokoworks/go-server/service/order/api/internal/repository"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
