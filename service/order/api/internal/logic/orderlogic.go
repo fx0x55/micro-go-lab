@@ -15,6 +15,7 @@ import (
 	"github.com/wokoworks/go-server/common/ecode"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/common/page"
+	"github.com/wokoworks/go-server/common/xmetrics"
 	"github.com/wokoworks/go-server/service/order/api/internal/svc"
 	"github.com/wokoworks/go-server/service/order/api/internal/types"
 )
@@ -62,6 +63,7 @@ func (l *CreateOrderLogic) Create(userID uint, req *types.CreateOrderRequest, id
 			gateKey = ""
 		} else if !acquired {
 			// key 已存在：重放（有缓存响应）或并发中（进行中）。
+			xmetrics.OrdersCreated.WithLabelValues("conflict").Inc()
 			return l.replayOrder(gateKey)
 		}
 	}
@@ -72,6 +74,7 @@ func (l *CreateOrderLogic) Create(userID uint, req *types.CreateOrderRequest, id
 		if gateKey != "" {
 			l.svcCtx.Redis.Del(l.ctx, gateKey)
 		}
+		xmetrics.OrdersCreated.WithLabelValues("error").Inc()
 		return nil, err
 	}
 
@@ -81,6 +84,7 @@ func (l *CreateOrderLogic) Create(userID uint, req *types.CreateOrderRequest, id
 			l.svcCtx.Redis.Set(l.ctx, gateKey, b, idempotencyTTL)
 		}
 	}
+	xmetrics.OrdersCreated.WithLabelValues("success").Inc()
 	return order, nil
 }
 

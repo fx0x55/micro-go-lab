@@ -3,6 +3,13 @@ Host: 0.0.0.0
 Port: 8081
 Mode: dev
 
+Log:
+  ServiceName: order-api
+  Mode: console
+  Encoding: json
+  Level: info
+  Stat: false
+
 Database:
   Host: localhost
   Port: 5432

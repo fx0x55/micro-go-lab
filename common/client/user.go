@@ -2,12 +2,15 @@ package client
 
 import (
 	"context"
+	"errors"
 
+	"github.com/zeromicro/go-zero/core/breaker"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 
 	"github.com/wokoworks/go-server/common/config"
+	"github.com/wokoworks/go-server/common/xmetrics"
 	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 )
 
@@ -59,6 +62,9 @@ func (c *UserClient) ValidateUser(ctx context.Context, userID uint) (*UserSummar
 		UserId: uint64(userID),
 	})
 	if err != nil {
+		if errors.Is(err, breaker.ErrServiceUnavailable) {
+			xmetrics.RPCBreakerRejected.WithLabelValues("ValidateUser").Inc()
+		}
 		logx.Error("gRPC ValidateUser failed", logx.Field("error", err))
 		return nil, err
 	}
@@ -70,6 +76,9 @@ func (c *UserClient) GetUser(ctx context.Context, userID uint) (*userv1.GetUserR
 		UserId: uint64(userID),
 	})
 	if err != nil {
+		if errors.Is(err, breaker.ErrServiceUnavailable) {
+			xmetrics.RPCBreakerRejected.WithLabelValues("GetUser").Inc()
+		}
 		logx.Error("gRPC GetUser failed", logx.Field("error", err))
 		return nil, err
 	}

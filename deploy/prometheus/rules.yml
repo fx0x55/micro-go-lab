@@ -1,0 +1,44 @@
+groups:
+  - name: error_rate_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_server_requests_code_total{code=~"5.."}[5m])) by (job) / sum(rate(http_server_requests_code_total[5m])) by (job) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.job }}"
+          description: "5xx error rate is above 5% ({{ $value | humanizePercentage }})"
+
+  - name: latency_alerts
+    rules:
+      - alert: HighLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(http_server_requests_duration_ms_bucket[5m])) by (le, job)) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p99 latency on {{ $labels.job }}"
+          description: "P99 latency is above 1s ({{ $value }}ms)"
+
+  - name: circuit_breaker_alerts
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: increase(rpc_calls_breaker_open_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is rejecting requests"
+          description: "RPC calls are being rejected by circuit breaker ({{ $value }} rejected)"
+
+  - name: database_alerts
+    rules:
+      - alert: DBConnectionSaturation
+        expr: go_sql_in_use_connections{db!=""} / go_sql_max_open_connections{db!=""} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool saturation on {{ $labels.db }}"
+          description: "DB connections are above 80% capacity ({{ $value | humanizePercentage }})"

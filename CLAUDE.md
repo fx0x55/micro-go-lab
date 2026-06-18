@@ -100,8 +100,69 @@ Tracing is handled entirely by go-zero's built-in OTel integration — no custom
 - **Jaeger UI**: `localhost:16686` (docker). Search by service name: `user-api`, `user-rpc`, `order-api`.
 - **Grafana**: Jaeger is provisioned as a datasource at `http://jaeger:16686`.
 
+### Observability (Structured Logging + Metrics + Alerts)
+
+#### Structured Logging
+
+- **JSON output**: all services log in JSON format via logx (configured in each `etc/*.yaml` `Log` section with `Encoding: json`). This enables log aggregation tools to parse and index logs by fields.
+- **Trace context injection**: `logx.WithContext(ctx)` automatically injects `trace` and `span` fields into JSON logs. All business logic uses `logx.WithContext(ctx)` for full trace correlation. Note: request-path logs (`common/middleware/logger.go`) use `logx.WithContext(r.Context())` and include HTTP-specific fields (`method`, `path`, `status`, `duration`, `ip`).
+- **GORM SQL logging** (`common/xdb/gormlogger.go`): custom logger replaces `logger.Default.LogMode(logger.Info)`:
+  - Default level **Warn** — only logs slow queries and errors, not all SQL (prevents PII exposure from full SQL dumps).
+  - **Slow query threshold**: configurable via `DatabaseConfig.SlowThreshold` (default 200ms). Set `DATABASE_SLOW_THRESHOLD` env var to override.
+  - **PII desensitization**: SQL string literals are redacted (`'value'` → `'?'`) before logging via regex `'(?:[^']|'')*'`.
+  - **Error filtering**: `gorm.ErrRecordNotFound` is excluded from error-level logging (expected in many query flows).
+
+#### Log Aggregation (Loki + Promtail)
+
+Docker Compose includes:
+- **Loki** (`grafana/loki:3.5.5`): log storage and query engine on port 3100, configured for single-node filesystem storage.
+- **Promtail** (`grafana/promtail:3.5.5`): log collector using Docker service discovery (`docker_sd_configs`), automatically discovers containers labeled `logging: promtail`.
+  - Pipeline stages: extracts `level` and `service` as Loki labels (avoids high-cardinality `trace` indexing), retains `trace`/`span` in log lines for full-text search.
+- **Grafana**: Loki is provisioned as a datasource at `http://loki:3100`. Query examples:
+  - `{service="user-api"} | json` — all JSON-structured logs from user-api
+  - `{service="order-api"} | json | level="error"` — error logs from order-api
+  - `{service=~".*"} | json | trace="<traceID>"` — correlate logs by trace ID across services
+
+#### Business Metrics
+
+Custom Prometheus counters registered in `common/xmetrics` (auto-registered via `init()`):
+
+- **`orders_created_total`** (order-api): labels `{result}` where result ∈ {success, conflict, error}. Tracks order creation volume, conflicts from idempotency gate, and failures.
+- **`users_registered_total`** (user-api): labels `{result}` where result ∈ {success, exists, error}. Tracks registration attempts.
+- **`rpc_calls_breaker_open_total`** (order-api): labels `{method}`. Incremented when `ValidateUser`/`GetUser` gRPC calls are rejected by go-zero's circuit breaker (`breaker.ErrServiceUnavailable`). Enables alerting on breaker-open state.
+
+#### DB Connection Pool Metrics
+
+`common/xdb/db.go` registers `collectors.NewDBStatsCollector(sqlDB, cfg.DBName)` from `prometheus/client_golang`, exposing `go_sql_*` metrics (open connections, in-use, idle, wait count/duration) labeled by database name.
+
+#### Prometheus Alert Rules
+
+Alert definitions in `deploy/prometheus/rules.yml` (loaded by `deploy/prometheus.yml`):
+
+| Alert | Condition | Severity | Description |
+|---|---|---|---|
+| `HighErrorRate` | 5xx rate > 5% for 5m | warning | HTTP error spike |
+| `HighLatencyP99` | p99 latency > 1s for 5m | warning | Latency degradation |
+| `CircuitBreakerOpen` | `rpc_calls_breaker_open_total` increase > 0 for 5m | critical | Downstream dependency failing |
+| `DBConnectionSaturation` | `go_sql_in_use_connections / go_sql_max_open_connections > 0.8` for 5m | warning | Connection pool exhaustion |
+
+Note: go-zero's HTTP metrics are `{http_server_requests_duration_ms, http_server_requests_code_total}` with labels `{path, method, code}`. Alerts aggregate across `job` label (service).
+
 ### Databases
 
 Single PostgreSQL instance with two databases:
 - `users_db` — user-api/user-rpc models: User, Todo
 - `orders_db` — order-api models: Order (Amount is int64, in cents/fen)
+
+### Environment Variables
+
+New variables added in Phase 2 (Observability):
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_SLOW_THRESHOLD` | 200ms | SQL query duration threshold for slow query logging (e.g., "500ms") |
+
+Note: pre-existing variables from Phases 0-1:
+- `DATABASE_SSLMODE`, `DATABASE_CONN_MAX_LIFETIME`, `DATABASE_CONN_MAX_IDLE_TIME`
+- `CACHE_TTL`, `CACHE_NEGATIVE_TTL`
+- `REDIS_HOST` (order-api only), `JWT_SECRET`, `OTLP_ENDPOINT`, `ETCD_HOSTS`, `ETCD_KEY`, `DATABASE_HOST`, `DATABASE_PORT`

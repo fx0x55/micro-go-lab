@@ -53,6 +53,8 @@ services:
     ports:
       - "8080:8080"
       - "9101:9101"
+    labels:
+      logging: "promtail"
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,12 +71,15 @@ services:
       target: user-rpc
     ports:
       - "9090:9090"
+    labels:
+      logging: "promtail"
     depends_on:
       postgres:
         condition: service_healthy
       etcd:
         condition: service_healthy
-      - redis
+      redis:
+        condition: service_started
     environment:
       DATABASE_HOST: postgres
       ETCD_HOSTS: "etcd:2379"
@@ -89,6 +94,8 @@ services:
     ports:
       - "8081:8081"
       - "9102:9102"
+    labels:
+      logging: "promtail"
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,7 +114,8 @@ services:
     ports:
       - "9091:9090"
     volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
 
   grafana:
     image: grafana/grafana:13.0.2
@@ -119,6 +127,7 @@ services:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+      - loki
 
   jaeger:
     image: jaegertracing/jaeger:2.19.0
@@ -126,6 +135,24 @@ services:
       - "16686:16686" # Jaeger UI
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
+
+  loki:
+    image: grafana/loki:3.5.5
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
+    command: -config.file=/etc/loki/config.yml
+
+  promtail:
+    image: grafana/promtail:3.5.5
+    volumes:
+      - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
 
 volumes:
   pg-data:

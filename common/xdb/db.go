@@ -3,9 +3,10 @@ package xdb
 import (
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/wokoworks/go-server/common/config"
 )
@@ -20,7 +21,7 @@ func New(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, sslmode)
 	gormDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: NewGormLogger(cfg.SlowThreshold),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connect database: %w", err)
@@ -38,5 +39,10 @@ func New(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	if cfg.ConnMaxIdleTime > 0 {
 		sqlDB.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
 	}
+
+	// 注册 DB 连接池指标收集器（go_sql_* 指标）。
+	// 使用数据库名称（如 "users_db"）作为 label，使多个数据库实例在 Prometheus 中可区分。
+	prometheus.MustRegister(collectors.NewDBStatsCollector(sqlDB, cfg.DBName))
+
 	return gormDB, nil
 }

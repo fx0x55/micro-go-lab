@@ -22,7 +22,12 @@ Telemetry:
   Batcher: otlpgrpc
 
 Log:
+  ServiceName: user-rpc
   Mode: console
+  Encoding: json
+  Level: info
+  Stat: false
+
 Redis:
   Host: localhost
   Port: 6379

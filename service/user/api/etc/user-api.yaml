@@ -3,6 +3,13 @@ Host: 0.0.0.0
 Port: 8080
 Mode: dev
 
+Log:
+  ServiceName: user-api
+  Mode: console
+  Encoding: json
+  Level: info
+  Stat: false
+
 Database:
   Host: localhost
   Port: 5432

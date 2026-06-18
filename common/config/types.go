@@ -44,6 +44,9 @@ type DatabaseConfig struct {
 	// SSLMode 透传 PostgreSQL sslmode；空字符串等同于 disable（保留本地开发默认）。
 	// 生产建议 require 或 verify-full。
 	SSLMode string `json:",optional"`
+	// SlowThreshold 慢查询阈值；超过此时间的 SQL 查询将被记录。
+	// 设为 0 时不记录慢查询。
+	SlowThreshold time.Duration `json:",default=200ms"`
 }
 
 // ApplyEnvOverrides 从环境变量读取连接池与 TLS 相关配置，供各服务 config 复用。
@@ -60,6 +63,11 @@ func (d *DatabaseConfig) ApplyEnvOverrides() {
 	if s := os.Getenv("DATABASE_CONN_MAX_IDLE_TIME"); s != "" {
 		if dur, err := time.ParseDuration(s); err == nil {
 			d.ConnMaxIdleTime = dur
+		}
+	}
+	if s := os.Getenv("DATABASE_SLOW_THRESHOLD"); s != "" {
+		if dur, err := time.ParseDuration(s); err == nil {
+			d.SlowThreshold = dur
 		}
 	}
 }
