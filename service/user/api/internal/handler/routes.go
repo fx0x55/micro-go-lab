@@ -12,6 +12,7 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
+	server.Use(middleware.RequestLogger)
 	server.Use(middleware.CorsMiddleware)
 	server.Use(middleware.NewRateLimiter(100, time.Minute).Middleware)
 

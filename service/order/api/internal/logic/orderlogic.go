@@ -8,15 +8,17 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/wokoworks/go-server/common/page"
+	"github.com/wokoworks/go-server/common/ecode"
 	"github.com/wokoworks/go-server/common/model"
 	"github.com/wokoworks/go-server/service/order/api/internal/svc"
 	"github.com/wokoworks/go-server/service/order/api/internal/types"
 )
 
+// 保留向后兼容的别名
 var (
-	ErrOrderNotFound           = errors.New("order not found")
-	ErrUserNotFound            = errors.New("user does not exist")
-	ErrInvalidStatusTransition = errors.New("invalid status transition")
+	ErrOrderNotFound           = ecode.ErrOrderNotFound
+	ErrUserNotFound            = ecode.ErrUserNotFound
+	ErrInvalidStatusTransition = ecode.ErrInvalidStatusTransition
 )
 
 var validTransitions = map[string]map[string]bool{
