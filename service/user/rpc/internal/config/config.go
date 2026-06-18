@@ -12,6 +12,7 @@ import (
 type Config struct {
 	zrpc.RpcServerConf
 	Database config.DatabaseConfig
+	Redis    config.RedisConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -31,5 +32,8 @@ func (c *Config) ApplyEnvOverrides() {
 	}
 	if k := os.Getenv("ETCD_KEY"); k != "" {
 		c.Etcd.Key = k
+	}
+	if s := os.Getenv("REDIS_HOST"); s != "" {
+		c.Redis.Host = s
 	}
 }

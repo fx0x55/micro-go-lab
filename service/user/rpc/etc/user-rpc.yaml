@@ -23,3 +23,7 @@ Telemetry:
 
 Log:
   Mode: console
+Redis:
+  Host: localhost
+  Port: 6379
+  DB: 0

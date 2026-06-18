@@ -35,6 +35,16 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # === Services ===
   user-api:
     build:
@@ -64,10 +74,12 @@ services:
         condition: service_healthy
       etcd:
         condition: service_healthy
+      - redis
     environment:
       DATABASE_HOST: postgres
       ETCD_HOSTS: "etcd:2379"
       ETCD_KEY: "user-svc.rpc"
+      REDIS_HOST: redis
       OTLP_ENDPOINT: jaeger:4317
 
   order-api:

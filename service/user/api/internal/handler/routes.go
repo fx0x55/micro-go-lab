@@ -6,11 +6,14 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 
 	"github.com/wokoworks/go-server/common/middleware"
+	"time"
+
 	"github.com/wokoworks/go-server/service/user/api/internal/svc"
 )
 
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
 	server.Use(middleware.CorsMiddleware)
+	server.Use(middleware.NewRateLimiter(100, time.Minute).Middleware)
 
 	// Health check
 	server.AddRoute(rest.Route{

@@ -1,12 +1,26 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/discov"
 )
+
+// RedisConfig 是 Redis 连接配置。
+type RedisConfig struct {
+	Host     string `json:",default=localhost"`
+	Port     int    `json:",default=6379"`
+	Password string `json:",optional"`
+	DB       int    `json:",default=0"`
+}
+
+// Addr 返回 host:port 格式地址。
+func (r *RedisConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", r.Host, r.Port)
+}
 
 // GRPCConfig 是 gRPC 服务端监听配置
 type GRPCConfig struct {
