@@ -14,6 +14,7 @@ type Config struct {
 	Database config.DatabaseConfig
 	JWT      config.JWTConfig
 	UserSvc  config.UserSvcConfig
+	Redis    config.RedisConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -31,10 +32,14 @@ func (c *Config) ApplyEnvOverrides() {
 			c.Database.Port = port
 		}
 	}
+	c.Database.ApplyEnvOverrides()
 	if hosts := config.EnvList("USERSVC_ETCD_HOSTS"); len(hosts) > 0 {
 		c.UserSvc.Etcd.Hosts = hosts
 	}
 	if k := os.Getenv("USERSVC_ETCD_KEY"); k != "" {
 		c.UserSvc.Etcd.Key = k
+	}
+	if s := os.Getenv("REDIS_HOST"); s != "" {
+		c.Redis.Host = s
 	}
 }

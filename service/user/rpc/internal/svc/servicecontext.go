@@ -7,6 +7,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 
+	"github.com/wokoworks/go-server/common/xcache"
 	"github.com/wokoworks/go-server/common/xredis"
 	"github.com/wokoworks/go-server/common/xdb"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/config"
@@ -18,6 +19,7 @@ type ServiceContext struct {
 	DB       *gorm.DB
 	UserRepo *repository.UserRepository
 	Redis    *redis.Client
+	Cache    *xcache.Cache
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -43,5 +45,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		DB:       gormDB,
 		UserRepo: repository.NewUserRepository(gormDB),
 		Redis:    redisClient,
+		// redisClient 为 nil 时 xcache 退化为直接回源（本地无 Redis 仍可用）。
+		Cache: xcache.New(redisClient, "user:validate:", c.Cache.TTL, c.Cache.NegativeTTL),
 	}
 }

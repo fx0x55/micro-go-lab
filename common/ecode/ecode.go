@@ -38,4 +38,5 @@ var (
 var (
 	ErrOrderNotFound           = New(400001, "order not found")
 	ErrInvalidStatusTransition = New(400002, "invalid status transition")
+	ErrIdempotencyConflict     = New(400003, "idempotent request in flight")
 )

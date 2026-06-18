@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/wokoworks/go-server/common/model"
 	"gorm.io/gorm"
 )
@@ -13,30 +15,30 @@ func NewOrderRepository(db *gorm.DB) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 
-func (r *OrderRepository) Create(order *model.Order) error {
-	return r.db.Create(order).Error
+func (r *OrderRepository) Create(ctx context.Context, order *model.Order) error {
+	return r.db.WithContext(ctx).Create(order).Error
 }
 
-func (r *OrderRepository) FindByIDAndUserID(id, userID uint) (*model.Order, error) {
+func (r *OrderRepository) FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Order, error) {
 	var order model.Order
-	err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&order).Error
+	err := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&order).Error
 	if err != nil {
 		return nil, err
 	}
 	return &order, nil
 }
 
-func (r *OrderRepository) FindByUserID(userID uint) ([]model.Order, error) {
+func (r *OrderRepository) FindByUserID(ctx context.Context, userID uint) ([]model.Order, error) {
 	var orders []model.Order
-	err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&orders).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&orders).Error
 	return orders, err
 }
 
-func (r *OrderRepository) FindByUserIDWithPage(userID uint, offset, limit int) ([]model.Order, int64, error) {
+func (r *OrderRepository) FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error) {
 	var orders []model.Order
 	var total int64
 
-	db := r.db.Model(&model.Order{}).Where("user_id = ?", userID)
+	db := r.db.WithContext(ctx).Model(&model.Order{}).Where("user_id = ?", userID)
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -45,6 +47,6 @@ func (r *OrderRepository) FindByUserIDWithPage(userID uint, offset, limit int) (
 	return orders, total, err
 }
 
-func (r *OrderRepository) Update(order *model.Order) error {
-	return r.db.Save(order).Error
+func (r *OrderRepository) Update(ctx context.Context, order *model.Order) error {
+	return r.db.WithContext(ctx).Save(order).Error
 }

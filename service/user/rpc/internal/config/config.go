@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/zeromicro/go-zero/zrpc"
 
@@ -13,6 +14,7 @@ type Config struct {
 	zrpc.RpcServerConf
 	Database config.DatabaseConfig
 	Redis    config.RedisConfig
+	Cache    config.CacheConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -27,6 +29,7 @@ func (c *Config) ApplyEnvOverrides() {
 			c.Database.Port = port
 		}
 	}
+	c.Database.ApplyEnvOverrides()
 	if hosts := config.EnvList("ETCD_HOSTS"); len(hosts) > 0 {
 		c.Etcd.Hosts = hosts
 	}
@@ -35,5 +38,15 @@ func (c *Config) ApplyEnvOverrides() {
 	}
 	if s := os.Getenv("REDIS_HOST"); s != "" {
 		c.Redis.Host = s
+	}
+	if s := os.Getenv("CACHE_TTL"); s != "" {
+		if dur, err := time.ParseDuration(s); err == nil {
+			c.Cache.TTL = dur
+		}
+	}
+	if s := os.Getenv("CACHE_NEGATIVE_TTL"); s != "" {
+		if dur, err := time.ParseDuration(s); err == nil {
+			c.Cache.NegativeTTL = dur
+		}
 	}
 }

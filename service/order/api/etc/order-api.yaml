@@ -19,6 +19,11 @@ UserSvc:
     Key: user-svc.rpc
   Timeout: 2000
 
+Redis:
+  Host: localhost
+  Port: 6379
+  DB: 0
+
 JWT:
   Secret: change-me-in-production
   Expiration: 24h

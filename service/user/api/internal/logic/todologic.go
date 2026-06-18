@@ -36,7 +36,7 @@ func (l *CreateTodoLogic) Create(userID uint, req *types.CreateTodoRequest) (*mo
 		UserID: userID,
 		Title:  req.Title,
 	}
-	if err := l.svcCtx.TodoRepo.Create(todo); err != nil {
+	if err := l.svcCtx.TodoRepo.Create(l.ctx, todo); err != nil {
 		return nil, err
 	}
 	return todo, nil
@@ -57,7 +57,7 @@ func NewListTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListTodo
 }
 
 func (l *ListTodoLogic) ListByUserID(userID uint, pg, pageSize int) (*page.Result, error) {
-	todos, total, err := l.svcCtx.TodoRepo.FindByUserIDWithPage(userID, (pg-1)*pageSize, pageSize)
+	todos, total, err := l.svcCtx.TodoRepo.FindByUserIDWithPage(l.ctx, userID, (pg-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func NewGetTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetTodoLo
 }
 
 func (l *GetTodoLogic) GetByID(userID, id uint) (*model.Todo, error) {
-	todo, err := l.svcCtx.TodoRepo.FindByIDAndUserID(id, userID)
+	todo, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTodoNotFound
@@ -104,7 +104,7 @@ func NewUpdateTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Update
 }
 
 func (l *UpdateTodoLogic) Update(userID, id uint, req *types.UpdateTodoRequest) (*model.Todo, error) {
-	todo, err := l.svcCtx.TodoRepo.FindByIDAndUserID(id, userID)
+	todo, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTodoNotFound
@@ -119,7 +119,7 @@ func (l *UpdateTodoLogic) Update(userID, id uint, req *types.UpdateTodoRequest) 
 		todo.Completed = *req.Completed
 	}
 
-	if err := l.svcCtx.TodoRepo.Update(todo); err != nil {
+	if err := l.svcCtx.TodoRepo.Update(l.ctx, todo); err != nil {
 		return nil, err
 	}
 	return todo, nil
@@ -140,11 +140,11 @@ func NewDeleteTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteTodoLogic) Delete(userID, id uint) error {
-	if _, err := l.svcCtx.TodoRepo.FindByIDAndUserID(id, userID); err != nil {
+	if _, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrTodoNotFound
 		}
 		return err
 	}
-	return l.svcCtx.TodoRepo.Delete(id)
+	return l.svcCtx.TodoRepo.Delete(l.ctx, id)
 }

@@ -30,4 +30,5 @@ func (c *Config) ApplyEnvOverrides() {
 			c.Database.Port = port
 		}
 	}
+	c.Database.ApplyEnvOverrides()
 }

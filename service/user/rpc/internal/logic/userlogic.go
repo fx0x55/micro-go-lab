@@ -2,21 +2,26 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
+	"github.com/wokoworks/go-server/common/xcache"
 	userv1 "github.com/wokoworks/go-server/service/user/rpc/pb"
 	"github.com/wokoworks/go-server/service/user/rpc/internal/svc"
 )
 
-const userCacheTTL = 5 * time.Minute
-const userCachePrefix = "user:validate:"
+// userSummary 是 ValidateUser 的缓存载荷。Cache 在 ServiceContext 中以
+// "user:validate:" 前缀构造，此处 key 仅传用户 ID。
+type userSummary struct {
+	Exists   bool   `json:"exists"`
+	Username string `json:"username,omitempty"`
+}
 
 type ValidateUserLogic struct {
 	ctx    context.Context
@@ -33,41 +38,34 @@ func NewValidateUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Vali
 }
 
 func (l *ValidateUserLogic) ValidateUser(req *userv1.ValidateUserRequest) (*userv1.ValidateUserResponse, error) {
-	// 尝试从缓存读取
-	if l.svcCtx.Redis != nil {
-		key := fmt.Sprintf("%s%d", userCachePrefix, req.UserId)
-		val, err := l.svcCtx.Redis.Get(l.ctx, key).Result()
-		if err == nil && val == "exists" {
-			nameKey := key + ":name"
-			name, _ := l.svcCtx.Redis.Get(l.ctx, nameKey).Result()
-			return &userv1.ValidateUserResponse{Exists: true, Username: name}, nil
-		}
-		if err == nil && val == "not_exists" {
-			return &userv1.ValidateUserResponse{Exists: false}, nil
-		}
-	}
-
-	user, err := l.svcCtx.UserRepo.FindByID(uint(req.UserId))
+	summary, err := xcache.GetOrLoad(l.ctx, l.svcCtx.Cache, fmt.Sprint(req.UserId),
+		func(s userSummary) ([]byte, error) { return json.Marshal(s) },
+		func(b []byte) (userSummary, error) {
+			var s userSummary
+			if uerr := json.Unmarshal(b, &s); uerr != nil {
+				return userSummary{}, uerr
+			}
+			return s, nil
+		},
+		func(ctx context.Context) (userSummary, error) {
+			user, err := l.svcCtx.UserRepo.FindByID(ctx, uint(req.UserId))
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					// 用户不存在 → 负缓存（短 TTL，见 CacheConfig.NegativeTTL）。
+					return userSummary{}, xcache.ErrMiss
+				}
+				return userSummary{}, status.Errorf(codes.Internal, "validate user failed: %v", err)
+			}
+			return userSummary{Exists: true, Username: user.Username}, nil
+		})
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			l.cacheResult(req.UserId, "not_exists", "")
+		if errors.Is(err, xcache.ErrMiss) {
 			return &userv1.ValidateUserResponse{Exists: false}, nil
 		}
-		return nil, status.Errorf(codes.Internal, "validate user failed: %v", err)
+		// 已是带 codes.Internal 的 gRPC status 错误，原样返回。
+		return nil, err
 	}
-	l.cacheResult(req.UserId, "exists", user.Username)
-	return &userv1.ValidateUserResponse{Exists: true, Username: user.Username}, nil
-}
-
-func (l *ValidateUserLogic) cacheResult(userID uint64, userStatus, username string) {
-	if l.svcCtx.Redis == nil {
-		return
-	}
-	key := fmt.Sprintf("%s%d", userCachePrefix, userID)
-	l.svcCtx.Redis.Set(l.ctx, key, userStatus, userCacheTTL)
-	if username != "" {
-		l.svcCtx.Redis.Set(l.ctx, key+":name", username, userCacheTTL)
-	}
+	return &userv1.ValidateUserResponse{Exists: summary.Exists, Username: summary.Username}, nil
 }
 
 type GetUserLogic struct {
@@ -85,7 +83,7 @@ func NewGetUserLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUserLo
 }
 
 func (l *GetUserLogic) GetUser(req *userv1.GetUserRequest) (*userv1.GetUserResponse, error) {
-	user, err := l.svcCtx.UserRepo.FindByID(uint(req.UserId))
+	user, err := l.svcCtx.UserRepo.FindByID(l.ctx, uint(req.UserId))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user not found")

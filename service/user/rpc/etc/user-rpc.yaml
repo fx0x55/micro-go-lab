@@ -27,3 +27,7 @@ Redis:
   Host: localhost
   Port: 6379
   DB: 0
+
+Cache:
+  TTL: 5m
+  NegativeTTL: 30s

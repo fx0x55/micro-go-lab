@@ -23,8 +23,14 @@ func CreateOrderHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewCreateOrderLogic(r.Context(), svcCtx)
-		order, err := l.Create(userID, &req)
+		// 可选幂等：客户端可携带 Idempotency-Key 防止重复下单。
+		idemKey := r.Header.Get("Idempotency-Key")
+		order, err := l.Create(userID, &req, idemKey)
 		if err != nil {
+			if errors.Is(err, logic.ErrIdempotencyConflict) {
+				middleware.ErrorJson(w, http.StatusConflict, err.Error())
+				return
+			}
 			if errors.Is(err, logic.ErrUserNotFound) {
 				middleware.BadRequest(w, err.Error())
 				return

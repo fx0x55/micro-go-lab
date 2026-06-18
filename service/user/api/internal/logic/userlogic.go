@@ -38,10 +38,10 @@ func NewRegisterLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Register
 }
 
 func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error) {
-	if _, err := l.svcCtx.UserRepo.FindByUsername(req.Username); err == nil {
+	if _, err := l.svcCtx.UserRepo.FindByUsername(l.ctx, req.Username); err == nil {
 		return nil, ErrUserExists
 	}
-	if _, err := l.svcCtx.UserRepo.FindByEmail(req.Email); err == nil {
+	if _, err := l.svcCtx.UserRepo.FindByEmail(l.ctx, req.Email); err == nil {
 		return nil, ErrUserExists
 	}
 
@@ -56,7 +56,7 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 		Email:    req.Email,
 	}
 
-	if err := l.svcCtx.UserRepo.Create(user); err != nil {
+	if err := l.svcCtx.UserRepo.Create(l.ctx, user); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrUserExists
@@ -81,7 +81,7 @@ func NewLoginLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LoginLogic 
 }
 
 func (l *LoginLogic) Login(req *types.LoginRequest) (map[string]interface{}, *model.User, error) {
-	user, err := l.svcCtx.UserRepo.FindByUsername(req.Username)
+	user, err := l.svcCtx.UserRepo.FindByUsername(l.ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, ErrInvalidCredentials
@@ -126,7 +126,7 @@ func NewProfileLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ProfileLo
 }
 
 func (l *ProfileLogic) GetProfile(userID uint) (*model.User, error) {
-	user, err := l.svcCtx.UserRepo.FindByID(userID)
+	user, err := l.svcCtx.UserRepo.FindByID(l.ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrInvalidCredentials
