@@ -7,6 +7,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// TodoRepositoryInterface 定义待办事项数据访问层的接口
+// 使用接口而不是具体类型，便于测试时mock
+type TodoRepositoryInterface interface {
+	Create(ctx context.Context, todo *model.Todo) error
+	FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Todo, error)
+	FindByUserID(ctx context.Context, userID uint) ([]model.Todo, error)
+	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Todo, int64, error)
+	Update(ctx context.Context, todo *model.Todo) error
+	Delete(ctx context.Context, id uint) error
+}
+
 type TodoRepository struct {
 	db *gorm.DB
 }

@@ -20,3 +20,7 @@ vendor/
 # Generated protobuf (regenerate with: make proto)
 service/user/rpc/pb/*.go
 .claude
+
+# Test coverage
+coverage.out
+*.coverprofile

@@ -12,8 +12,8 @@ import (
 type ServiceContext struct {
 	Config   config.Config
 	DB       *gorm.DB
-	UserRepo *repository.UserRepository
-	TodoRepo *repository.TodoRepository
+	UserRepo repository.UserRepositoryInterface
+	TodoRepo repository.TodoRepositoryInterface
 }
 
 func NewServiceContext(c *config.Config) *ServiceContext {
