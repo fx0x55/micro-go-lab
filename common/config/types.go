@@ -91,6 +91,45 @@ type CacheConfig struct {
 	NegativeTTL time.Duration `json:",default=30s"`
 }
 
+// CORSConfig 是 CORS 跨域配置。
+// AllowedOrigins 为 ["*"] 时允许所有来源（开发默认）；否则仅允许白名单中的来源。
+type CORSConfig struct {
+	AllowedOrigins []string `json:",default=[*]"`
+}
+
+// ApplyEnvOverrides 从环境变量读取 CORS 允许的来源列表（逗号分隔）。
+func (c *CORSConfig) ApplyEnvOverrides() {
+	if origins := EnvList("CORS_ALLOWED_ORIGINS"); len(origins) > 0 {
+		c.AllowedOrigins = origins
+	}
+}
+
+// defaultSecrets 是已知的不安全默认值列表。
+var defaultSecrets = []string{"change-me-in-production", ""}
+
+// ValidateSecrets 检查已知的不安全默认密钥。
+// dev/test 模式下仅输出警告；pro/pre 模式下直接拒绝启动。
+func ValidateSecrets(mode string, jwtSecrets ...string) error {
+	var warnings []string
+	for _, s := range jwtSecrets {
+		for _, d := range defaultSecrets {
+			if s == d {
+				warnings = append(warnings, "JWT secret 使用了默认值或为空")
+			}
+		}
+	}
+	if len(warnings) == 0 {
+		return nil
+	}
+	msg := "insecure defaults detected: " + strings.Join(warnings, "; ")
+	if mode == "pro" || mode == "pre" {
+		return fmt.Errorf("%s (set proper values or use dev/test mode)", msg)
+	}
+	// dev/test: 警告但不阻断
+	fmt.Printf("WARNING: %s (acceptable in %s mode)\n", msg, mode)
+	return nil
+}
+
 // EnvList 从环境变量读取逗号分隔的列表
 func EnvList(name string) []string {
 	s := os.Getenv(name)

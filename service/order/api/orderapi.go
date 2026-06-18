@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/rest"
 
+	commonconfig "github.com/wokoworks/go-server/common/config"
 	"github.com/wokoworks/go-server/common/validator"
 	"github.com/wokoworks/go-server/service/order/api/internal/config"
 	"github.com/wokoworks/go-server/service/order/api/internal/handler"
@@ -22,6 +23,9 @@ func main() {
 	var cfg config.Config
 	conf.MustLoad(*configFile, &cfg)
 	cfg.ApplyEnvOverrides()
+	if err := commonconfig.ValidateSecrets(cfg.Mode, cfg.JWT.Secret); err != nil {
+		panic(err)
+	}
 	cfg.MustSetUp()
 	validator.Init()
 

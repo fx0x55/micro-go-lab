@@ -15,6 +15,7 @@ type Config struct {
 	JWT      config.JWTConfig
 	UserSvc  config.UserSvcConfig
 	Redis    config.RedisConfig
+	CORS     config.CORSConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -42,4 +43,5 @@ func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("REDIS_HOST"); s != "" {
 		c.Redis.Host = s
 	}
+	c.CORS.ApplyEnvOverrides()
 }

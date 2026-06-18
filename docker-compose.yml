@@ -62,7 +62,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_HOST: postgres
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
 
   user-rpc:
@@ -71,6 +71,7 @@ services:
       target: user-rpc
     ports:
       - "9090:9090"
+      - "9103:9103"
     labels:
       logging: "promtail"
     depends_on:
@@ -105,7 +106,7 @@ services:
       DATABASE_HOST: postgres
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
 
   # === Monitoring ===

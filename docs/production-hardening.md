@@ -20,8 +20,8 @@
 |---|---|---|
 | 0 | 止血（限流 IP、负缓存 TTL） | ✅ 完成 2026-06-18 |
 | 1 | 弹性与正确性（连接池、ctx 贯通、缓存层、幂等） | ✅ 完成 2026-06-18 |
-| 2 | 可观测性完善（结构化日志、Loki、告警） | ⬜ 待做 |
-| 3 | 安全加固（TLS、密钥、网关） | ⬜ 待做 |
+| 2 | 可观测性完善（结构化日志、Loki、告警） | ✅ 完成 2026-06-18 |
+| 3 | 安全加固（TLS、密钥、网关） | ✅ 完成 2026-06-18 |
 | 4 | 部署与运维（K8s、CI/CD、探针、HPA） | ⬜ 待做 |
 | 5 | 数据一致性与规模化（Outbox、MQ、只读副本） | ⬜ 待做 |
 
@@ -72,18 +72,35 @@
 
 ---
 
-## ⬜ 阶段 2：可观测性完善
+## ✅ 阶段 2：可观测性完善
 
 1. **日志**：logx 切 JSON 输出；接入 **traceID/spanID 注入日志**（go-zero logx 天然支持）；GORM logger 从 `Info` 降到 `Warn` 且脱敏（当前 `xdb/db.go` 是 `logger.Info` 会打全量 SQL 含 PII）。
 2. **日志聚合**：compose 加 **Loki + Promtail**，Grafana 统一面板。
 3. **指标+告警**：补 Prometheus alert rules（5xx 率、p99 延迟、熔断 open、DB 连接饱和）；加业务指标（下单 QPS、注册成功数）。
 
-## ⬜ 阶段 3：安全加固
+### 实现细节
+
+- **日志**：`common/xdb/gormlogger.go` 自定义 GORM logger，慢查询阈值 200ms（可通过 `DATABASE_SLOW_THRESHOLD` 环境变量调整），SQL 字面量脱敏（`'value'` → `'?'`），`gorm.ErrRecordNotFound` 不记为错误。
+- **日志聚合**：`docker-compose.yml` 包含 Loki (`grafana/loki:3.5.5`) + Promtail (`grafana/promtail:3.5.5`)。Promtail 使用 Docker 服务发现（标签 `logging: promtail`），解析 JSON 日志提取 `level`/`service` 作为 Loki 标签。Grafana 预配置 Loki 数据源。
+- **业务指标**：`common/xmetrics/xmetrics.go` 注册 `orders_created_total`、`users_registered_total`、`rpc_calls_breaker_open_total` 三个 Prometheus 计数器。
+- **DB 连接池指标**：`common/xdb/db.go` 注册 `collectors.NewDBStatsCollector`，暴露 `go_sql_*` 系列指标。
+- **告警规则**：`deploy/prometheus/rules.yml` 定义 4 条告警（HighErrorRate、HighLatencyP99、CircuitBreakerOpen、DBConnectionSaturation）。
+- **Prometheus 采集**：user-api(:9101)、order-api(:9102)、user-rpc(:9103) 均配置独立 Prometheus 端口。
+
+## ✅ 阶段 3：安全加固
 
 4. **TLS**：HTTP 走 HTTPS；gRPC 启用 TLS；服务间可选 mTLS（或上 service mesh）。
 5. **密钥管理**：去掉 `change-me-in-production` 默认 secret；接入 Vault / 云 KMS / 文件挂载；确认 `.gitignore` 无 etc 明文。
 6. **CORS 收紧**：白名单 origin，按环境配置（当前 `cors.go` 是 `*`）。
-7. **网关**：引入 APISIX/Traefik 做 TLS 终止、统一鉴权、全局限流。
+7. **网关**：引入 APISIX/Traefik 做 TLS 终止、统一鉴权、全局限流。（待做）
+
+### 实现细节
+
+- **CORS 收紧**：`common/middleware/cors.go` 改为 `NewCorsMiddleware(cfg CORSConfig)`，支持白名单 origin。默认 `["*"]`（开发模式），生产通过 `CORS_ALLOWED_ORIGINS` 环境变量配置。非通配符时返回 `Vary: Origin` 头，正确处理 HTTP 缓存。
+- **密钥校验**：`common/config/types.go` 提供 `ValidateSecrets(mode, jwtSecrets)` 函数。`dev`/`test` 模式输出警告；`pro`/`pre` 模式拒绝启动。user-api 和 order-api 在 `cfg.ApplyEnvOverrides()` 后调用。
+- **HTTP TLS**：go-zero `RestConf` 已内置 `CertFile`/`KeyFile` 字段，通过 `TLS_CERT_FILE`/`TLS_KEY_FILE` 环境变量注入。未设置时退化为 HTTP（开发默认）。生产环境 TLS 由基础设施层（API Gateway / Ingress Controller / Service Mesh）统一终止。
+- **gRPC TLS**：gRPC TLS 由基础设施层（Service Mesh mTLS）统一处理，应用代码不直接管理证书。
+- **网关**：待后续阶段引入 APISIX/Traefik。
 
 ## ⬜ 阶段 4：部署与运维
 

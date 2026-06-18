@@ -44,3 +44,7 @@ Telemetry:
   Endpoint: localhost:4317
   Sampler: 1.0
   Batcher: otlpgrpc
+
+CORS:
+  AllowedOrigins:
+    - "*"

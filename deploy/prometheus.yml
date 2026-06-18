@@ -13,3 +13,7 @@ scrape_configs:
   - job_name: "order-api"
     static_configs:
       - targets: ["order-api:9102"]
+
+  - job_name: "user-rpc"
+    static_configs:
+      - targets: ["user-rpc:9103"]

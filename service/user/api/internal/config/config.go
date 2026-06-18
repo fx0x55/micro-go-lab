@@ -13,6 +13,7 @@ type Config struct {
 	rest.RestConf
 	Database config.DatabaseConfig
 	JWT      config.JWTConfig
+	CORS     config.CORSConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -31,4 +32,5 @@ func (c *Config) ApplyEnvOverrides() {
 		}
 	}
 	c.Database.ApplyEnvOverrides()
+	c.CORS.ApplyEnvOverrides()
 }

@@ -36,3 +36,8 @@ Redis:
 Cache:
   TTL: 5m
   NegativeTTL: 30s
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9103
+  Path: /metrics
