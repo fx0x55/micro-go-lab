@@ -3,8 +3,6 @@ version: "2"
 run:
   timeout: 5m
   tests: true
-  exclude-dirs:
-    - service/user/rpc/pb
 
 linters:
   default: none
@@ -85,6 +83,10 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # exclude protoc-generated protobuf code
+      - path: 'rpc/pb/'
+        linters:
+          - all
       # relax some checks in test files
       - path: _test\.go
         linters:
