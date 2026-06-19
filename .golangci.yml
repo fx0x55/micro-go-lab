@@ -3,6 +3,8 @@ version: "2"
 run:
   timeout: 5m
   tests: true
+  exclude-dirs:
+    - service/user/rpc/pb
 
 linters:
   default: none

@@ -17,8 +17,6 @@ vendor/
 .env
 *.env.local
 
-# Generated protobuf (regenerate with: make proto)
-service/user/rpc/pb/*.go
 .claude
 
 # Test coverage
