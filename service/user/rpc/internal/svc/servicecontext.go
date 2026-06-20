@@ -31,9 +31,9 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	}
 
 	var redisClient *redis.Client
-	if c.Redis.Host != "" {
+	if c.RedisCache.Host != "" {
 		var err error
-		redisClient, err = xredis.New(c.Redis)
+		redisClient, err = xredis.New(c.RedisCache)
 		if err != nil {
 			logx.Errorf("failed to connect redis: %v, proceeding without cache", err)
 		}

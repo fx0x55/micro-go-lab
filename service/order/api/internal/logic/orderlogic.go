@@ -12,9 +12,11 @@ import (
 	"github.com/fx0x55/micro-go-lab/common/ecode"
 	"github.com/fx0x55/micro-go-lab/common/model"
 	"github.com/fx0x55/micro-go-lab/common/page"
+	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/svc"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/types"
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
@@ -107,9 +109,55 @@ func (l *CreateOrderLogic) createOrder(userID uint, req *types.CreateOrderReques
 		Amount:      req.Amount,
 		Status:      model.StatusPending,
 	}
-	if err := l.svcCtx.OrderRepo.Create(l.ctx, order); err != nil {
+
+	// 开启事务：写 order + outbox event 原子操作
+	tx := l.svcCtx.DB.Begin()
+	if tx.Error != nil {
+		return nil, ecode.ErrInternal
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	if err := l.svcCtx.OrderRepo.Create(tx, order); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
+
+	// 写 outbox event（同一事务）
+	payload, _ := json.Marshal(xevent.Envelope{
+		Event:      xevent.OrderCreated,
+		Version:    1,
+		OccurredAt: time.Now(),
+		Data: xevent.OrderCreatedData{
+			OrderID:     order.ID,
+			UserID:      order.UserID,
+			ProductName: order.ProductName,
+			Amount:      order.Amount,
+			Status:      order.Status,
+		},
+	})
+	outboxEvent := &xevent.OutboxEvent{
+		EventID:   uuid.New().String(),
+		Topic:     xevent.TopicOrderEvents,
+		EventKey:  strconv.FormatUint(uint64(order.UserID), 10),
+		EventType: string(xevent.OrderCreated),
+		Version:   1,
+		Payload:   string(payload),
+		Status:    xevent.OutboxStatusPending,
+	}
+	if err := l.svcCtx.OutboxRepo.Insert(tx, outboxEvent); err != nil {
+		tx.Rollback()
+		return nil, ecode.ErrInternal
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, ecode.ErrInternal
+	}
+
 	return order, nil
 }
 

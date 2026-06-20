@@ -2,7 +2,7 @@ services:
   # === Infrastructure ===
   etcd:
     image: gcr.io/etcd-development/etcd:v3.5.31
-    command: etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379
+    command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
     ports:
       - "2379:2379"
       - "2380:2380"
@@ -60,10 +60,13 @@ services:
         condition: service_healthy
       etcd:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       DATABASE_HOST: postgres
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
+      REDIS_HOST: redis
 
   user-rpc:
     build:
@@ -102,12 +105,15 @@ services:
         condition: service_healthy
       user-rpc:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       DATABASE_HOST: postgres
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
+      REDIS_HOST: redis
 
   # === Monitoring ===
   prometheus:

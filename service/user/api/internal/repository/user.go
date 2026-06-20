@@ -10,7 +10,7 @@ import (
 // UserRepositoryInterface 定义用户数据访问层的接口
 // 使用接口而不是具体类型，便于测试时mock
 type UserRepositoryInterface interface {
-	Create(ctx context.Context, user *model.User) error
+	Create(tx *gorm.DB, user *model.User) error
 	FindByID(ctx context.Context, id uint) (*model.User, error)
 	FindByUsername(ctx context.Context, username string) (*model.User, error)
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
@@ -24,8 +24,8 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
-	return r.db.WithContext(ctx).Create(user).Error
+func (r *UserRepository) Create(tx *gorm.DB, user *model.User) error {
+	return tx.Create(user).Error
 }
 
 func (r *UserRepository) FindByID(ctx context.Context, id uint) (*model.User, error) {

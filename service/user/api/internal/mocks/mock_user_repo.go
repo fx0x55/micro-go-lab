@@ -15,6 +15,7 @@ import (
 
 	model "github.com/fx0x55/micro-go-lab/common/model"
 	gomock "go.uber.org/mock/gomock"
+	gorm "gorm.io/gorm"
 )
 
 // MockUserRepositoryInterface is a mock of UserRepositoryInterface interface.
@@ -41,17 +42,17 @@ func (m *MockUserRepositoryInterface) EXPECT() *MockUserRepositoryInterfaceMockR
 }
 
 // Create mocks base method.
-func (m *MockUserRepositoryInterface) Create(ctx context.Context, user *model.User) error {
+func (m *MockUserRepositoryInterface) Create(tx *gorm.DB, user *model.User) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, user)
+	ret := m.ctrl.Call(m, "Create", tx, user)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockUserRepositoryInterfaceMockRecorder) Create(ctx, user any) *gomock.Call {
+func (mr *MockUserRepositoryInterfaceMockRecorder) Create(tx, user any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserRepositoryInterface)(nil).Create), ctx, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserRepositoryInterface)(nil).Create), tx, user)
 }
 
 // FindByEmail mocks base method.

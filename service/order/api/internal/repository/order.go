@@ -7,6 +7,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// OrderRepositoryInterface 定义订单数据访问层的接口
+type OrderRepositoryInterface interface {
+	Create(tx *gorm.DB, order *model.Order) error
+	FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Order, error)
+	FindByUserID(ctx context.Context, userID uint) ([]model.Order, error)
+	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error)
+	Update(ctx context.Context, order *model.Order) error
+}
+
 type OrderRepository struct {
 	db *gorm.DB
 }
@@ -15,8 +24,8 @@ func NewOrderRepository(db *gorm.DB) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 
-func (r *OrderRepository) Create(ctx context.Context, order *model.Order) error {
-	return r.db.WithContext(ctx).Create(order).Error
+func (r *OrderRepository) Create(tx *gorm.DB, order *model.Order) error {
+	return tx.Create(order).Error
 }
 
 func (r *OrderRepository) FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Order, error) {

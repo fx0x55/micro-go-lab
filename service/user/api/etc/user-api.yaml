@@ -36,3 +36,8 @@ Telemetry:
 CORS:
   AllowedOrigins:
     - "*"
+
+Redis:
+  Host: localhost
+  Port: 6379
+  DB: 0

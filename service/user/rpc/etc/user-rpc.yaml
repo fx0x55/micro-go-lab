@@ -28,7 +28,7 @@ Log:
   Level: info
   Stat: false
 
-Redis:
+RedisCache:
   Host: localhost
   Port: 6379
   DB: 0

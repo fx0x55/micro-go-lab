@@ -2,16 +2,19 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/fx0x55/micro-go-lab/common/ecode"
 	"github.com/fx0x55/micro-go-lab/common/model"
-	"github.com/fx0x55/micro-go-lab/service/user/api/internal/event"
+	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/zeromicro/go-zero/core/logx"
 	"golang.org/x/crypto/bcrypt"
@@ -57,7 +60,20 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 		Email:    req.Email,
 	}
 
-	if err := l.svcCtx.UserRepo.Create(l.ctx, user); err != nil {
+	// 开启事务：写 user + outbox event 原子操作
+	tx := l.svcCtx.DB.Begin()
+	if tx.Error != nil {
+		return nil, ecode.ErrInternal
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	if err := l.svcCtx.UserRepo.Create(tx, user); err != nil {
+		tx.Rollback()
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrUserExists
@@ -65,12 +81,33 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 		return nil, err
 	}
 
-	// 用户注册成功后，保存事件到Outbox（异步创建欢迎待办）
-	outboxEvent := event.NewEvent(event.UserRegistered, map[string]any{
-		"user_id":  user.ID,
-		"username": user.Username,
+	// 写 outbox event（同一事务）
+	payload, _ := json.Marshal(xevent.Envelope{
+		Event:      xevent.UserRegistered,
+		Version:    1,
+		OccurredAt: time.Now(),
+		Data: xevent.UserRegisteredData{
+			UserID:   user.ID,
+			Username: user.Username,
+		},
 	})
-	l.svcCtx.Outbox.Add(&outboxEvent)
+	outboxEvent := &xevent.OutboxEvent{
+		EventID:   uuid.New().String(),
+		Topic:     xevent.TopicUserEvents,
+		EventKey:  strconv.FormatUint(uint64(user.ID), 10),
+		EventType: string(xevent.UserRegistered),
+		Version:   1,
+		Payload:   string(payload),
+		Status:    xevent.OutboxStatusPending,
+	}
+	if err := l.svcCtx.OutboxRepo.Insert(tx, outboxEvent); err != nil {
+		tx.Rollback()
+		return nil, ecode.ErrInternal
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, ecode.ErrInternal
+	}
 
 	return user, nil
 }

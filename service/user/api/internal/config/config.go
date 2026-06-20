@@ -13,6 +13,7 @@ type Config struct {
 	Database config.DatabaseConfig
 	JWT      config.JWTConfig
 	CORS     config.CORSConfig
+	Redis    config.RedisConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -29,6 +30,9 @@ func (c *Config) ApplyEnvOverrides() {
 		if port, err := strconv.Atoi(s); err == nil {
 			c.Database.Port = port
 		}
+	}
+	if s := os.Getenv("REDIS_HOST"); s != "" {
+		c.Redis.Host = s
 	}
 	c.Database.ApplyEnvOverrides()
 	c.CORS.ApplyEnvOverrides()

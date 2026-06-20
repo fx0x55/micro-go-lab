@@ -5,21 +5,25 @@ import (
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/xdb"
+	"github.com/fx0x55/micro-go-lab/common/xevent"
+	"github.com/fx0x55/micro-go-lab/common/xredis"
+	"github.com/fx0x55/micro-go-lab/common/xstream"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
-	"github.com/fx0x55/micro-go-lab/service/user/api/internal/event"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/repository"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 type ServiceContext struct {
-	Config   config.Config
-	DB       *gorm.DB
-	UserRepo repository.UserRepositoryInterface
-	TodoRepo repository.TodoRepositoryInterface
-	Outbox   *event.Outbox
-	EventBus event.EventBus
-	Consumer *event.Consumer
-	Poller   *event.Poller
+	Config     config.Config
+	DB         *gorm.DB
+	UserRepo   repository.UserRepositoryInterface
+	TodoRepo   repository.TodoRepositoryInterface
+	OutboxRepo *xevent.OutboxRepository
+	Producer   *xstream.Producer
+	Poller     *xstream.Poller
+	Consumer   *xstream.Consumer
+	Redis      *redis.Client
 }
 
 func NewServiceContext(c *config.Config) *ServiceContext {
@@ -31,24 +35,38 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
-	// 初始化事件系统
-	eventBus := event.NewChannelEventBus(100)
-	outbox := event.NewOutbox(eventBus)
-	consumer := event.NewConsumer(eventBus)
-	poller := event.NewPoller(outbox, 5*time.Second)
+	// 初始化 Redis
+	redisClient, err := xredis.New(c.Redis)
+	if err != nil {
+		panic(fmt.Sprintf("failed to connect redis: %v", err))
+	}
 
-	// 启动消费者和轮询器
-	consumer.Start()
+	// 初始化 Redis Streams 事务性 Outbox 系统
+	outboxRepo := xevent.NewOutboxRepository(gormDB)
+	producer := xstream.NewProducer(redisClient)
+	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
+	consumer := xstream.NewConsumer(
+		redisClient,
+		xstream.ConsumerConfig{
+			Group:  "user-api",
+			Stream: xevent.TopicOrderEvents,
+			Name:   "user-api-1",
+		},
+		HandleOrderEvent,
+	)
+
 	poller.Start()
+	consumer.Start()
 
 	return &ServiceContext{
-		Config:   *c,
-		DB:       gormDB,
-		UserRepo: repository.NewUserRepository(gormDB),
-		TodoRepo: repository.NewTodoRepository(gormDB),
-		Outbox:   outbox,
-		EventBus: eventBus,
-		Consumer: consumer,
-		Poller:   poller,
+		Config:     *c,
+		DB:         gormDB,
+		UserRepo:   repository.NewUserRepository(gormDB),
+		TodoRepo:   repository.NewTodoRepository(gormDB),
+		OutboxRepo: outboxRepo,
+		Producer:   producer,
+		Poller:     poller,
+		Consumer:   consumer,
+		Redis:      redisClient,
 	}
 }

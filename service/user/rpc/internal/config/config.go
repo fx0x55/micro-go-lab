@@ -11,9 +11,9 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Database config.DatabaseConfig
-	Redis    config.RedisConfig
-	Cache    config.CacheConfig
+	Database   config.DatabaseConfig
+	RedisCache config.RedisConfig
+	Cache      config.CacheConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -36,7 +36,7 @@ func (c *Config) ApplyEnvOverrides() {
 		c.Etcd.Key = k
 	}
 	if s := os.Getenv("REDIS_HOST"); s != "" {
-		c.Redis.Host = s
+		c.RedisCache.Host = s
 	}
 	if s := os.Getenv("CACHE_TTL"); s != "" {
 		if dur, err := time.ParseDuration(s); err == nil {
