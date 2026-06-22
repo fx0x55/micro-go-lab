@@ -2,6 +2,7 @@ package svc
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/xdb"
@@ -11,6 +12,7 @@ import (
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/repository"
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
 
@@ -45,14 +47,19 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 	outboxRepo := xevent.NewOutboxRepository(gormDB)
 	producer := xstream.NewProducer(redisClient)
 	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
+
+	hostname := os.Getenv("HOSTNAME")
+	if hostname == "" {
+		hostname = "user-api-1"
+	}
 	consumer := xstream.NewConsumer(
 		redisClient,
 		xstream.ConsumerConfig{
 			Group:  "user-api",
 			Stream: xevent.TopicOrderEvents,
-			Name:   "user-api-1",
+			Name:   "user-api-" + hostname,
 		},
-		HandleOrderEvent,
+		HandleOrderEvent(gormDB),
 	)
 
 	poller.Start()
@@ -69,4 +76,14 @@ func NewServiceContext(c *config.Config) *ServiceContext {
 		Consumer:   consumer,
 		Redis:      redisClient,
 	}
+}
+
+func (sc *ServiceContext) Stop() {
+	if sc.Poller != nil {
+		sc.Poller.Stop()
+	}
+	if sc.Consumer != nil {
+		sc.Consumer.Stop()
+	}
+	logx.Info("stream poller and consumer stopped")
 }

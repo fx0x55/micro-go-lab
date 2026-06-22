@@ -31,6 +31,7 @@ func main() {
 	svcCtx := svc.NewServiceContext(&cfg)
 
 	proc.AddShutdownListener(func() {
+		svcCtx.Stop()
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {
 			_ = sqlDB.Close()
 		}

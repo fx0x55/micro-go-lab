@@ -1,6 +1,8 @@
 package xstream
 
 import (
+	"crypto/rand"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -35,6 +37,12 @@ func (p *Poller) Start() {
 }
 
 func (p *Poller) poll() {
+	// 首次 tick 加随机 jitter，防止多实例同时轮询造成 DB 抖动
+	jitterBig, err := rand.Int(rand.Reader, big.NewInt(int64(p.interval)))
+	if err == nil {
+		time.Sleep(time.Duration(jitterBig.Int64()))
+	}
+
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
@@ -57,6 +65,18 @@ func (p *Poller) tick() {
 
 	for i := range events {
 		event := &events[i]
+
+		// 重试次数超限，标记为 failed 并跳过
+		if event.RetryCount >= xevent.MaxRetries {
+			logx.Error("outbox event max retries exceeded",
+				logx.Field("event_id", event.EventID),
+				logx.Field("retry_count", event.RetryCount))
+			if err := p.outboxRepo.MarkAsFailed(event.ID, "max retries exceeded"); err != nil {
+				logx.Error("outbox mark failed", logx.Field("id", event.ID), logx.Field("error", err.Error()))
+			}
+			continue
+		}
+
 		values := map[string]string{
 			"event":       event.EventType,
 			"event_id":    event.EventID,

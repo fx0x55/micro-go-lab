@@ -16,7 +16,7 @@ const (
 	OrderCreated   EventType = "order.created"
 )
 
-// Envelope 是 Kafka 消息 value 的统一结构
+// Envelope 是 Redis Stream 消息的统一结构
 type Envelope struct {
 	Event      EventType `json:"event"`
 	Version    int       `json:"version"`
