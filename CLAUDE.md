@@ -20,8 +20,10 @@ go test ./service/user/api/internal/logic/... -v
 # Single test
 go test ./service/user/api/internal/logic/... -v -run TestName
 
-# Full stack via Docker (etcd, postgres, user-api, user-rpc, order-api, prometheus, grafana, jaeger)
+# Full stack via Docker (etcd, postgres, user-api, user-rpc, order-api)
 make docker-up
+# Full stack + monitoring (prometheus, grafana, jaeger, loki, promtail)
+make docker-full
 make docker-down
 
 # Go proxy (required in China network)

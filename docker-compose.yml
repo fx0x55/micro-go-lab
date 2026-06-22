@@ -115,8 +115,9 @@ services:
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis
 
-  # === Monitoring ===
+  # === Monitoring (docker compose --profile monitoring up) ===
   prometheus:
+    profiles: ["monitoring"]
     image: prom/prometheus:v3.5.3
     ports:
       - "9091:9090"
@@ -125,6 +126,7 @@ services:
       - ./deploy/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
 
   grafana:
+    profiles: ["monitoring"]
     image: grafana/grafana:13.0.2
     ports:
       - "3000:3000"
@@ -137,6 +139,7 @@ services:
       - loki
 
   jaeger:
+    profiles: ["monitoring"]
     image: jaegertracing/jaeger:2.19.0
     ports:
       - "16686:16686" # Jaeger UI
@@ -144,6 +147,7 @@ services:
       - "4318:4318" # OTLP HTTP
 
   loki:
+    profiles: ["monitoring"]
     image: grafana/loki:3.5.5
     ports:
       - "3100:3100"
@@ -152,6 +156,7 @@ services:
     command: -config.file=/etc/loki/config.yml
 
   promtail:
+    profiles: ["monitoring"]
     image: grafana/promtail:3.5.5
     volumes:
       - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro

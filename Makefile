@@ -32,8 +32,11 @@ proto:
 docker-up:
 	docker compose up -d --build
 
+docker-full:
+	docker compose --profile monitoring up -d --build
+
 docker-down:
-	docker compose down -v
+	docker compose --profile monitoring down -v
 
 install-lint:
 	@if ! command -v golangci-lint &> /dev/null; then \
