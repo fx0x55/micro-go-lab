@@ -29,12 +29,10 @@ func TestCreateTodoLogic_Create(t *testing.T) {
 	}
 
 	testTodo := &model.Todo{
-		ID:        1,
+		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}},
 		UserID:    1,
 		Title:     testTodoTitle,
 		Completed: false,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	tests := []struct {
@@ -53,7 +51,6 @@ func TestCreateTodoLogic_Create(t *testing.T) {
 				mockTodoRepo.EXPECT().
 					Create(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, todo *model.Todo) error {
-						// 模拟数据库创建，设置ID
 						todo.ID = testTodo.ID
 						todo.CreatedAt = testTodo.CreatedAt
 						todo.UpdatedAt = testTodo.UpdatedAt
@@ -98,12 +95,10 @@ func TestGetTodoLogic_GetByID(t *testing.T) {
 	}
 
 	testTodo := &model.Todo{
-		ID:        1,
+		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}},
 		UserID:    1,
 		Title:     testTodoTitle,
 		Completed: false,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	tests := []struct {
@@ -174,8 +169,8 @@ func TestListTodoLogic_ListByUserID(t *testing.T) {
 	}
 
 	testTodos := []model.Todo{
-		{ID: 1, UserID: 1, Title: "Todo 1", CreatedAt: time.Now()},
-		{ID: 2, UserID: 1, Title: "Todo 2", CreatedAt: time.Now()},
+		{BaseModel: model.BaseModel{Model: gorm.Model{ID: 1, CreatedAt: time.Now()}}, UserID: 1, Title: "Todo 1"},
+		{BaseModel: model.BaseModel{Model: gorm.Model{ID: 2, CreatedAt: time.Now()}}, UserID: 1, Title: "Todo 2"},
 	}
 
 	tests := []struct {
@@ -234,12 +229,10 @@ func TestUpdateTodoLogic_Update(t *testing.T) {
 	}
 
 	testTodo := &model.Todo{
-		ID:        1,
+		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}},
 		UserID:    1,
 		Title:     "Old Title",
 		Completed: false,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	newTitle := "New Title"
@@ -281,12 +274,12 @@ func TestUpdateTodoLogic_Update(t *testing.T) {
 					Times(1)
 			},
 			expectedTodo: &model.Todo{
-				ID:        1,
+				BaseModel: model.BaseModel{
+					Model: gorm.Model{ID: 1, CreatedAt: testTodo.CreatedAt, UpdatedAt: testTodo.UpdatedAt},
+				},
 				UserID:    1,
 				Title:     newTitle,
 				Completed: newCompleted,
-				CreatedAt: testTodo.CreatedAt,
-				UpdatedAt: testTodo.UpdatedAt,
 			},
 			expectedErr: nil,
 		},
@@ -340,9 +333,9 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 	}
 
 	testTodo := &model.Todo{
-		ID:     1,
-		UserID: 1,
-		Title:  testTodoTitle,
+		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1}},
+		UserID:    1,
+		Title:     testTodoTitle,
 	}
 
 	tests := []struct {

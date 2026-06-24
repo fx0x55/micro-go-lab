@@ -34,12 +34,10 @@ func TestLoginLogic_Login(t *testing.T) {
 
 	// 定义测试用的用户
 	testUser := &model.User{
-		ID:        1,
+		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}},
 		Username:  "testuser",
 		Password:  string(hashedPassword),
 		Email:     "test@example.com",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	// 定义测试用的JWT配置
