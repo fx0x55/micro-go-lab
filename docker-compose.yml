@@ -115,6 +115,70 @@ services:
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis
 
+  # === Services (Delve debug mode) ===
+  user-api-debug:
+    profiles: ["debug"]
+    build:
+      context: .
+      target: user-api-debug
+    ports:
+      - "8080:8080"
+      - "40001:40001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_HOST: postgres
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
+      REDIS_HOST: redis
+
+  user-rpc-debug:
+    profiles: ["debug"]
+    build:
+      context: .
+      target: user-rpc-debug
+    ports:
+      - "9090:9090"
+      - "40002:40002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_HOST: postgres
+      ETCD_HOSTS: "etcd:2379"
+      ETCD_KEY: "user-svc.rpc"
+      REDIS_HOST: redis
+
+  order-api-debug:
+    profiles: ["debug"]
+    build:
+      context: .
+      target: order-api-debug
+    ports:
+      - "8081:8081"
+      - "40003:40003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-rpc:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_HOST: postgres
+      USERSVC_ETCD_HOSTS: "etcd:2379"
+      USERSVC_ETCD_KEY: "user-svc.rpc"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
+      REDIS_HOST: redis
+
   # === Monitoring (docker compose --profile monitoring up) ===
   prometheus:
     profiles: ["monitoring"]

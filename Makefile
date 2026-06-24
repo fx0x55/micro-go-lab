@@ -1,4 +1,6 @@
-.PHONY: run-user-api run-user-rpc run-order-api build test clean docker-up docker-down proto lint install-lint
+.PHONY: run-user-api run-user-rpc run-order-api build test clean docker-up docker-down proto lint install-lint \
+       infra infra-full infra-down dev-user-api dev-user-rpc dev-order-api \
+       debug debug-user-api debug-user-rpc debug-order-api
 
 run-user-api:
 	go run ./service/user/api
@@ -57,3 +59,36 @@ lint: install-lint
 
 format: install-lint
 	golangci-lint run --fix ./...
+
+# === Infrastructure (docker-dev.yml) ===
+infra:
+	docker compose -f docker-dev.yml up -d
+
+infra-full:
+	docker compose -f docker-dev.yml --profile monitoring up -d
+
+infra-down:
+	docker compose -f docker-dev.yml down -v
+
+# === Local development (infra Docker + native Go) ===
+dev-user-api: infra
+	go run ./service/user/api
+
+dev-user-rpc: infra
+	go run ./service/user/rpc
+
+dev-order-api: infra
+	go run ./service/order/api
+
+# === Container debug (Delve) ===
+debug:
+	docker compose --profile debug up -d --build
+
+debug-user-api:
+	docker compose --profile debug up -d --build user-api-debug
+
+debug-user-rpc:
+	docker compose --profile debug up -d --build user-rpc-debug
+
+debug-order-api:
+	docker compose --profile debug up -d --build order-api-debug

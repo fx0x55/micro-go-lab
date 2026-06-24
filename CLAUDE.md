@@ -26,6 +26,20 @@ make docker-up
 make docker-full
 make docker-down
 
+# Development mode: infra Docker + native Go (fastest iteration)
+make infra                    # Start etcd/postgres/redis only
+make dev-user-api             # Infra + local go run
+make dev-user-rpc             # Infra + local go run
+make dev-order-api            # Infra + local go run
+make infra-full               # Infra + monitoring
+make infra-down               # Stop all infra
+
+# Container debug mode (Delve)
+make debug                    # All services with Delve
+make debug-user-api           # Single service with Delve (port 40001)
+make debug-user-rpc           # Single service with Delve (port 40002)
+make debug-order-api          # Single service with Delve (port 40003)
+
 # Go proxy (required in China network)
 GOPROXY=https://goproxy.cn go mod download
 

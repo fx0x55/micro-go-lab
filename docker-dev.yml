@@ -1,0 +1,99 @@
+services:
+  # === Infrastructure ===
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.5.31
+    command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "8589934592"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+      POSTGRES_EXTRA_DBS: orders_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql
+      - ./deploy/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === Monitoring (docker compose --profile monitoring up) ===
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.5.3
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:13.0.2
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - loki
+
+  jaeger:
+    profiles: ["monitoring"]
+    image: jaegertracing/jaeger:2.19.0
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+
+  loki:
+    profiles: ["monitoring"]
+    image: grafana/loki:3.5.5
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
+    command: -config.file=/etc/loki/config.yml
+
+  promtail:
+    profiles: ["monitoring"]
+    image: grafana/promtail:3.5.5
+    volumes:
+      - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+volumes:
+  pg-data:
