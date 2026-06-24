@@ -50,3 +50,11 @@ func NotFound(w http.ResponseWriter, msg string) {
 func InternalError(w http.ResponseWriter, msg string) {
 	ErrorJson(w, http.StatusInternalServerError, msg)
 }
+
+// NotAllowHandler 返回一个处理 405 Method Not Allowed 的 http.Handler，
+// 返回与项目统一格式的 JSON 响应。
+func NotAllowHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ErrorJson(w, http.StatusMethodNotAllowed, "method not allowed")
+	})
+}

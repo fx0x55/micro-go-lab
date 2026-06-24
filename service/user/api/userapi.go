@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	commonconfig "github.com/fx0x55/micro-go-lab/common/config"
+	"github.com/fx0x55/micro-go-lab/common/middleware"
 	"github.com/fx0x55/micro-go-lab/common/validator"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/config"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/handler"
@@ -37,7 +38,7 @@ func main() {
 		}
 	})
 
-	httpSrv := rest.MustNewServer(cfg.RestConf)
+	httpSrv := rest.MustNewServer(cfg.RestConf, rest.WithNotAllowedHandler(middleware.NotAllowHandler()))
 	defer httpSrv.Stop()
 	handler.RegisterHandlers(httpSrv, svcCtx)
 
