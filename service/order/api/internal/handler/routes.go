@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/middleware"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/svc"
@@ -12,7 +11,7 @@ import (
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
 	server.Use(middleware.RequestLogger)
 	server.Use(middleware.NewCorsMiddleware(svcCtx.Config.CORS))
-	server.Use(middleware.NewRateLimiter(100, time.Minute).Middleware)
+	server.Use(svcCtx.RateLimiter.Middleware)
 
 	// Health check
 	server.AddRoute(rest.Route{

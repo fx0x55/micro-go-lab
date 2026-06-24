@@ -83,6 +83,35 @@ service/{name}/{api|rpc}/
 - **Database**: PostgreSQL via GORM; schema managed by **goose** SQL migrations (embedded via `go:embed`, run automatically at startup in `common/xdb/migrate.go`)
 - **Proto source** in `api/user/v1/`; generated code in `service/user/rpc/pb/` (gitignored, regenerate with `make proto`)
 
+### Background Goroutine Lifecycle
+
+所有后台 goroutine 统一由 context + WaitGroup 管理，由 `ServiceContext.Stop()` 统一关闭。
+
+**启动流程** (`main` → `NewServiceContext`):
+```
+ctx, cancel := context.WithCancel(context.Background())
+svcCtx = NewServiceContext(ctx, cfg)
+  → poller.Start(ctx, &wg)
+  → consumer.Start(ctx, &wg)
+  → ratelimiter = NewRateLimiter(ctx, ...)
+```
+
+**关闭流程** (`SIGINT` → `proc.AddShutdownListener`):
+```
+svcCtx.Stop()
+  → cancel()    // ctx 取消，所有 goroutine 收到信号
+  → wg.Wait()   // 阻塞直到每个 goroutine 调用 wg.Done()
+```
+
+**新增后台 goroutine 的规范**：
+1. 函数签名：`func Start(ctx context.Context, wg *sync.WaitGroup)`
+2. `Start()` 中调用 `wg.Add(1)`，启动 `go func(ctx, wg)`
+3. goroutine 内部用 `select case <-ctx.Done()` 检测取消信号，退出前调用 `wg.Done()`
+4. 循环体包裹 `xstream.RunWithRecover(ctx, caller, fn)` 防止单次 panic 杀死整个进程
+
+**Panic 隔离** (`common/xstream/recover.go`):
+`RunWithRecover(ctx, caller, fn)` — panic 时记录 caller 标识 + 堆栈，不传播，goroutine 继续下一轮循环。适用于所有长运行循环。
+
 ### Distributed tracing (OpenTelemetry → Jaeger)
 
 Tracing is handled entirely by go-zero's built-in OTel integration — no custom middleware or interceptors needed.

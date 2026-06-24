@@ -5,12 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// consumerCaller 用于日志标识 panic 发生在哪个消费者 goroutine。
+func consumerCaller(cfg ConsumerConfig) string {
+	return "consumer:" + cfg.Group + "/" + cfg.Name
+}
 
 // ConsumerConfig 消费者配置
 type ConsumerConfig struct {
@@ -34,8 +40,8 @@ func NewProducer(rdb *redis.Client) *Producer {
 }
 
 // Publish 写入一条消息到 stream
-func (p *Producer) Publish(stream string, values map[string]string) (string, error) {
-	return p.rdb.XAdd(context.Background(), &redis.XAddArgs{
+func (p *Producer) Publish(ctx context.Context, stream string, values map[string]string) (string, error) {
+	return p.rdb.XAdd(ctx, &redis.XAddArgs{
 		Stream: stream,
 		MaxLen: p.maxLen,
 		Approx: true,
@@ -48,8 +54,6 @@ type Consumer struct {
 	rdb     *redis.Client
 	cfg     ConsumerConfig
 	handler Handler
-	cancel  context.CancelFunc
-	done    chan struct{}
 }
 
 // NewConsumer 创建 Redis Streams 消费者
@@ -58,14 +62,17 @@ func NewConsumer(rdb *redis.Client, cfg ConsumerConfig, handler Handler) *Consum
 		rdb:     rdb,
 		cfg:     cfg,
 		handler: handler,
-		done:    make(chan struct{}),
 	}
 }
 
-// Start 启动消费者（在 goroutine 中运行）
-func (c *Consumer) Start() {
-	// 确保 consumer group 存在
-	if err := c.rdb.XGroupCreateMkStream(context.Background(), c.cfg.Stream, c.cfg.Group, "0").Err(); err != nil {
+// Start 启动消费者（在 goroutine 中运行）。
+// ctx 取消时 goroutine 安全退出；wg 用于等待 goroutine 结束。
+func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
+	// 确保 consumer group 存在（初始化阶段，不接受外部 cancel）
+	//nolint:contextcheck // 初始化阶段，使用独立 context
+	if err := c.rdb.XGroupCreateMkStream(
+		context.Background(), c.cfg.Stream, c.cfg.Group, "0",
+	).Err(); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "BUSYGROUP") {
 			logx.Info("consumer group already exists",
@@ -80,6 +87,7 @@ func (c *Consumer) Start() {
 	}
 
 	// 诊断：启动时检查 stream 状态
+	//nolint:contextcheck // 初始化诊断，使用独立 context
 	length, _ := c.rdb.XLen(context.Background(), c.cfg.Stream).Result()
 	logx.Info("consumer starting",
 		logx.Field("stream", c.cfg.Stream),
@@ -87,12 +95,15 @@ func (c *Consumer) Start() {
 		logx.Field("consumer", c.cfg.Name),
 		logx.Field("stream_length", length))
 
-	go c.consume()
+	wg.Add(1)
+	go c.consume(ctx, wg)
 }
 
-func (c *Consumer) consume() {
-	ctx, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
+func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	caller := consumerCaller(c.cfg)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	logx.Info("consumer loop started",
@@ -102,7 +113,7 @@ func (c *Consumer) consume() {
 
 	for {
 		select {
-		case <-c.done:
+		case <-ctx.Done():
 			logx.Info("consumer loop stopping",
 				logx.Field("stream", c.cfg.Stream),
 				logx.Field("consumer", c.cfg.Name))
@@ -110,59 +121,53 @@ func (c *Consumer) consume() {
 		default:
 		}
 
-		streams, err := c.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
-			Group:    c.cfg.Group,
-			Consumer: c.cfg.Name,
-			Streams:  []string{c.cfg.Stream, ">"},
-			Count:    10,
-			Block:    2 * time.Second,
-		}).Result()
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
+		RunWithRecover(ctx, caller, func(ctx context.Context) {
+			streams, err := c.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+				Group:    c.cfg.Group,
+				Consumer: c.cfg.Name,
+				Streams:  []string{c.cfg.Stream, ">"},
+				Count:    10,
+				Block:    2 * time.Second,
+			}).Result()
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				if errors.Is(err, redis.Nil) {
+					return
+				}
+				logx.Error("redis stream read failed",
+					logx.Field("stream", c.cfg.Stream),
+					logx.Field("error", err.Error()))
 				return
 			}
-			if errors.Is(err, redis.Nil) {
-				continue
-			}
-			logx.Error("redis stream read failed",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("error", err.Error()))
-			continue
-		}
 
-		msgCount := 0
-		for _, stream := range streams {
-			for _, msg := range stream.Messages {
-				msgCount++
-				strValues := toStringMap(msg.Values)
-				if err := c.handler(strValues); err != nil {
-					logx.Error("stream handler failed",
-						logx.Field("stream", c.cfg.Stream),
-						logx.Field("id", msg.ID),
-						logx.Field("error", err.Error()),
-					)
-					xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "error").Inc()
-					continue
+			msgCount := 0
+			for _, stream := range streams {
+				for _, msg := range stream.Messages {
+					msgCount++
+					strValues := toStringMap(msg.Values)
+					if err := c.handler(strValues); err != nil {
+						logx.Error("stream handler failed",
+							logx.Field("stream", c.cfg.Stream),
+							logx.Field("id", msg.ID),
+							logx.Field("error", err.Error()),
+						)
+						xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "error").Inc()
+						continue
+					}
+					_ = c.rdb.XAck(ctx, c.cfg.Stream, c.cfg.Group, msg.ID).Err()
+					xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "success").Inc()
 				}
-				_ = c.rdb.XAck(context.Background(), c.cfg.Stream, c.cfg.Group, msg.ID).Err()
-				xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "success").Inc()
 			}
-		}
-		if msgCount > 0 {
-			logx.Info("consumer batch processed",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("consumer", c.cfg.Name),
-				logx.Field("count", msgCount))
-		}
+			if msgCount > 0 {
+				logx.Info("consumer batch processed",
+					logx.Field("stream", c.cfg.Stream),
+					logx.Field("consumer", c.cfg.Name),
+					logx.Field("count", msgCount))
+			}
+		})
 	}
-}
-
-// Stop 停止消费者
-func (c *Consumer) Stop() {
-	if c.cancel != nil {
-		c.cancel()
-	}
-	close(c.done)
 }
 
 // toStringMap 将 map[string]interface{} 转换为 map[string]string

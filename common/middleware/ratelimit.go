@@ -1,11 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // RateLimiter 基于滑动窗口的 IP 限流中间件。
@@ -14,6 +17,7 @@ type RateLimiter struct {
 	visitors map[string]*visitor
 	rate     int           // 每窗口允许的请求数
 	window   time.Duration // 窗口大小
+	cancel   context.CancelFunc
 }
 
 type visitor struct {
@@ -22,26 +26,51 @@ type visitor struct {
 }
 
 // NewRateLimiter 创建限流器，rate 为每个 window 时间窗口内允许的最大请求数。
-func NewRateLimiter(rate int, window time.Duration) *RateLimiter {
+// 传入的 ctx 用于控制 cleanup goroutine 的生命周期：ctx 取消时 cleanup 自动退出。
+func NewRateLimiter(ctx context.Context, rate int, window time.Duration) *RateLimiter {
+	ctx, cancel := context.WithCancel(ctx)
+
 	rl := &RateLimiter{
 		visitors: make(map[string]*visitor),
 		rate:     rate,
 		window:   window,
+		cancel:   cancel,
 	}
-	go rl.cleanup()
+	go rl.cleanup(ctx)
 	return rl
 }
 
-func (rl *RateLimiter) cleanup() {
-	for {
-		time.Sleep(rl.window * 2)
-		rl.mu.Lock()
-		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > rl.window*2 {
-				delete(rl.visitors, ip)
-			}
+func (rl *RateLimiter) cleanup(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			logx.Error("ratelimit cleanup goroutine panic recovered",
+				logx.Field("panic", r))
 		}
-		rl.mu.Unlock()
+	}()
+
+	ticker := time.NewTicker(rl.window * 2)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			for ip, v := range rl.visitors {
+				if time.Since(v.lastSeen) > rl.window*2 {
+					delete(rl.visitors, ip)
+				}
+			}
+			rl.mu.Unlock()
+		}
+	}
+}
+
+// Stop 停止 cleanup goroutine，释放资源。
+func (rl *RateLimiter) Stop() {
+	if rl.cancel != nil {
+		rl.cancel()
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
@@ -29,7 +30,8 @@ func main() {
 	cfg.MustSetUp()
 	validator.Init()
 
-	svcCtx := svc.NewServiceContext(&cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	svcCtx := svc.NewServiceContext(ctx, &cfg)
 
 	proc.AddShutdownListener(func() {
 		svcCtx.Stop()
@@ -37,6 +39,7 @@ func main() {
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {
 			_ = sqlDB.Close()
 		}
+		cancel()
 	})
 
 	httpSrv := rest.MustNewServer(cfg.RestConf, rest.WithNotAllowedHandler(middleware.NotAllowHandler()))

@@ -1,9 +1,11 @@
 package xstream
 
 import (
+	"context"
 	"crypto/rand"
 	"math/big"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/xevent"
@@ -11,13 +13,15 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// pollerCaller 用于日志标识 panic 发生在 poller goroutine。
+const pollerCaller = "poller"
+
 // Poller Outbox 轮询器，定期从 DB 读取待发送事件并发布到 Redis Stream
 type Poller struct {
 	outboxRepo *xevent.OutboxRepository
 	producer   *Producer
 	interval   time.Duration
 	batchSize  int
-	done       chan struct{}
 }
 
 // NewPoller 创建 Outbox 轮询器
@@ -27,20 +31,27 @@ func NewPoller(outboxRepo *xevent.OutboxRepository, producer *Producer, interval
 		producer:   producer,
 		interval:   interval,
 		batchSize:  batchSize,
-		done:       make(chan struct{}),
 	}
 }
 
-// Start 启动轮询器（在 goroutine 中运行）
-func (p *Poller) Start() {
-	go p.poll()
+// Start 启动轮询器（在 goroutine 中运行）。
+// ctx 取消时 goroutine 安全退出；wg 用于等待 goroutine 结束。
+func (p *Poller) Start(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go p.poll(ctx, wg)
 }
 
-func (p *Poller) poll() {
+func (p *Poller) poll(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	// 首次 tick 加随机 jitter，防止多实例同时轮询造成 DB 抖动
 	jitterBig, err := rand.Int(rand.Reader, big.NewInt(int64(p.interval)))
 	if err == nil {
-		time.Sleep(time.Duration(jitterBig.Int64()))
+		select {
+		case <-time.After(time.Duration(jitterBig.Int64())):
+		case <-ctx.Done():
+			return
+		}
 	}
 
 	ticker := time.NewTicker(p.interval)
@@ -48,15 +59,17 @@ func (p *Poller) poll() {
 
 	for {
 		select {
-		case <-p.done:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			p.tick()
+			RunWithRecover(ctx, pollerCaller, func(ctx context.Context) {
+				p.tick(ctx)
+			})
 		}
 	}
 }
 
-func (p *Poller) tick() {
+func (p *Poller) tick(ctx context.Context) {
 	events, err := p.outboxRepo.FindPending(p.batchSize)
 	if err != nil {
 		logx.Error("outbox find pending failed", logx.Field("error", err.Error()))
@@ -86,7 +99,7 @@ func (p *Poller) tick() {
 			"payload":     event.Payload,
 		}
 
-		_, err := p.producer.Publish(event.Topic, values)
+		_, err := p.producer.Publish(ctx, event.Topic, values)
 		if err != nil {
 			logx.Error("outbox publish failed",
 				logx.Field("event_id", event.EventID),
@@ -94,7 +107,7 @@ func (p *Poller) tick() {
 				logx.Field("error", err.Error()),
 			)
 			if err := p.outboxRepo.IncrementRetryCount(event.ID, err.Error()); err != nil {
-				logx.Error(
+				logx.WithContext(ctx).Error(
 					"outbox increment retry failed",
 					logx.Field("id", event.ID),
 					logx.Field("error", err.Error()),
@@ -115,9 +128,4 @@ func (p *Poller) tick() {
 			logx.Field("event_type", event.EventType),
 		)
 	}
-}
-
-// Stop 停止轮询器
-func (p *Poller) Stop() {
-	close(p.done)
 }
