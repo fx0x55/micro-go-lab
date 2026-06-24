@@ -14,12 +14,13 @@ func New(code int, msg string) *CodeError { return &CodeError{Code: code, Messag
 
 // 通用错误码 1xxxxx
 var (
-	OK              = &CodeError{0, "ok"}
-	ErrParam        = New(100001, "invalid parameter")
-	ErrUnauthorized = New(100002, "unauthorized")
-	ErrNotFound     = New(100003, "resource not found")
-	ErrInternal     = New(100004, "internal server error")
-	ErrRateLimit    = New(100005, "rate limit exceeded")
+	OK                    = &CodeError{0, "ok"}
+	ErrParam              = New(100001, "invalid parameter")
+	ErrUnauthorized       = New(100002, "unauthorized")
+	ErrNotFound           = New(100003, "resource not found")
+	ErrInternal           = New(100004, "internal server error")
+	ErrRateLimit          = New(100005, "rate limit exceeded")
+	ErrOptimisticConflict = New(100006, "optimistic lock conflict")
 )
 
 // 用户模块 2xxxxx

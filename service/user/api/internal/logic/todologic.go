@@ -139,6 +139,7 @@ func NewDeleteTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteTodoLogic) Delete(userID, id uint) error {
+	// 先验证存在性及所有权，再执行删除
 	if _, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrTodoNotFound

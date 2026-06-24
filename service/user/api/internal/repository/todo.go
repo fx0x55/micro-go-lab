@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/fx0x55/micro-go-lab/common/ecode"
 	"github.com/fx0x55/micro-go-lab/common/model"
 	"gorm.io/gorm"
 )
@@ -63,9 +64,23 @@ func (r *TodoRepository) FindByUserIDWithPage(
 }
 
 func (r *TodoRepository) Update(ctx context.Context, todo *model.Todo) error {
-	return r.db.WithContext(ctx).Save(todo).Error
+	result := r.db.WithContext(ctx).Save(todo)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ecode.ErrOptimisticConflict
+	}
+	return nil
 }
 
 func (r *TodoRepository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.Todo{}, id).Error
+	result := r.db.WithContext(ctx).Delete(&model.Todo{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ecode.ErrTodoNotFound
+	}
+	return nil
 }

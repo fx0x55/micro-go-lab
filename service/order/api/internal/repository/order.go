@@ -13,7 +13,7 @@ type OrderRepositoryInterface interface {
 	FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Order, error)
 	FindByUserID(ctx context.Context, userID uint) ([]model.Order, error)
 	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error)
-	Update(ctx context.Context, order *model.Order) error
+	Update(ctx context.Context, order *model.Order) (int64, error)
 }
 
 type OrderRepository struct {
@@ -60,6 +60,7 @@ func (r *OrderRepository) FindByUserIDWithPage(
 	return orders, total, err
 }
 
-func (r *OrderRepository) Update(ctx context.Context, order *model.Order) error {
-	return r.db.WithContext(ctx).Save(order).Error
+func (r *OrderRepository) Update(ctx context.Context, order *model.Order) (int64, error) {
+	result := r.db.WithContext(ctx).Save(order)
+	return result.RowsAffected, result.Error
 }

@@ -258,8 +258,12 @@ func (l *UpdateOrderStatusLogic) UpdateStatus(
 	}
 
 	order.Status = req.Status
-	if err := l.svcCtx.OrderRepo.Update(l.ctx, order); err != nil {
+	affected, err := l.svcCtx.OrderRepo.Update(l.ctx, order)
+	if err != nil {
 		return nil, err
+	}
+	if affected == 0 {
+		return nil, ecode.ErrOptimisticConflict
 	}
 	return order, nil
 }
