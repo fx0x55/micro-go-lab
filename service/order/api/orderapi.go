@@ -39,6 +39,7 @@ func main() {
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {
 			_ = sqlDB.Close()
 		}
+		_ = svcCtx.Redis.Close()
 		cancel()
 	})
 

@@ -42,6 +42,9 @@ func Migrate(ctx context.Context, gormDB *gorm.DB, service string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = provider.Close()
+	}()
 
 	_, err = provider.Up(ctx)
 	return err
