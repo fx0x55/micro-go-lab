@@ -5,46 +5,56 @@ import (
 
 	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
+	"github.com/fx0x55/micro-go-lab/common/xstream"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
 
 // HandleUserEvent 消费 user-events stream 的消息（带幂等）
-func HandleUserEvent(db *gorm.DB) func(values map[string]string) error {
+func HandleUserEvent(idempotentRepo *xevent.IdempotentRepository) xstream.Handler {
 	return func(values map[string]string) error {
 		eventID := values["event_id"]
 		if eventID == "" {
 			return nil
 		}
 
-		// 幂等：检查是否已处理
-		var exists bool
-		db.Raw("SELECT EXISTS(SELECT 1 FROM processed_events WHERE event_id = ?)", eventID).Scan(&exists)
-		if exists {
-			return nil
-		}
-
 		payload := values["payload"]
 		var envelope xevent.Envelope
 		if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
-			logx.Error("unmarshal user event failed", logx.Field("error", err.Error()))
+			logx.Error("unmarshal user event failed",
+				logx.Field("event_id", eventID),
+				logx.Field("error", err.Error()))
 			xmetrics.RedisStreamMessagesConsumed.WithLabelValues(xevent.TopicUserEvents, "order-api", "error").Inc()
+			return nil // 反序列化失败是永久性错误，跳过避免无限重试
+		}
+
+		processed, err := idempotentRepo.Process(eventID, func(tx *gorm.DB) error {
+			return handleUserEvent(&envelope)
+		})
+		if err != nil {
+			logx.Error("event processing failed",
+				logx.Field("event_id", eventID),
+				logx.Field("error", err.Error()))
 			return err
 		}
 
-		switch envelope.Event {
-		case xevent.UserRegistered:
-			data, _ := json.Marshal(envelope.Data)
-			logx.Info("received UserRegistered",
-				logx.Field("event", string(envelope.Event)),
-				logx.Field("data", string(data)),
-			)
-		default:
-			logx.Info("received unknown event", logx.Field("event", string(envelope.Event)))
+		if !processed {
+			logx.Info("event already processed, skipping", logx.Field("event_id", eventID))
 		}
 
-		// 标记已处理
-		db.Exec("INSERT INTO processed_events (event_id) VALUES (?) ON CONFLICT DO NOTHING", eventID)
 		return nil
 	}
+}
+
+func handleUserEvent(envelope *xevent.Envelope) error {
+	switch envelope.Event {
+	case xevent.UserRegistered:
+		data, _ := json.Marshal(envelope.Data)
+		logx.Info("received UserRegistered",
+			logx.Field("event", string(envelope.Event)),
+			logx.Field("data", string(data)))
+	default:
+		logx.Info("received unknown event", logx.Field("event", string(envelope.Event)))
+	}
+	return nil
 }

@@ -51,20 +51,28 @@ func (r *TodoRepository) FindByUserIDWithPage(
 	userID uint,
 	offset, limit int,
 ) ([]model.Todo, int64, error) {
-	var todos []model.Todo
-	var total int64
-
-	db := r.db.WithContext(ctx).Model(&model.Todo{}).Where("user_id = ?", userID)
-	if err := db.Count(&total).Error; err != nil {
+	db := gorm.G[model.Todo](r.db).Where("user_id = ?", userID)
+	total, err := db.Count(ctx, "id")
+	if err != nil {
 		return nil, 0, err
 	}
 
-	err := db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&todos).Error
-	return todos, total, err
+	var todos []model.Todo
+	if total == 0 {
+		return todos, 0, nil
+	}
+	todos, err = db.Order("created_at DESC").Offset(offset).Limit(limit).Find(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return todos, total, nil
 }
 
 func (r *TodoRepository) Update(ctx context.Context, todo *model.Todo) error {
-	result := r.db.WithContext(ctx).Save(todo)
+	result := r.db.WithContext(ctx).Updates(map[string]any{
+		"title":     todo.Title,
+		"completed": todo.Completed,
+	})
 	if result.Error != nil {
 		return result.Error
 	}

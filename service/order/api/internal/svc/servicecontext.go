@@ -40,13 +40,13 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	if err := xdb.Migrate(gormDB, "order"); err != nil { //nolint:contextcheck // Migrate 不接受 context 参数
+	if err := xdb.Migrate(ctx, gormDB, "order"); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
 	userCli := client.NewUserClient(&c.UserSvc)
 
-	redisClient, err := xredis.New(c.Redis) //nolint:contextcheck // New 不接受 context 参数
+	redisClient, err := xredis.New(ctx, c.Redis)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect redis: %v", err))
 	}
@@ -59,6 +59,8 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	producer := xstream.NewProducer(redisClient)
 	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
 
+	idempotentRepo := xevent.NewIdempotentRepository(gormDB)
+
 	hostname := os.Getenv("HOSTNAME")
 	if hostname == "" {
 		hostname = "order-api-1"
@@ -70,7 +72,7 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 			Stream: xevent.TopicUserEvents,
 			Name:   "order-api-" + hostname,
 		},
-		HandleUserEvent(gormDB),
+		HandleUserEvent(idempotentRepo),
 	)
 
 	rateLimiter := middleware.NewRateLimiter(ctx, 100, time.Minute)

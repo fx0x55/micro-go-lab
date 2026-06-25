@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
@@ -25,7 +26,7 @@ func main() {
 	cfg.ApplyEnvOverrides()
 	cfg.MustSetUp()
 
-	svcCtx := svc.NewServiceContext(&cfg)
+	svcCtx := svc.NewServiceContext(context.Background(), &cfg)
 
 	proc.AddShutdownListener(func() {
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {

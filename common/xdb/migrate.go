@@ -15,7 +15,7 @@ var migrationsFS embed.FS
 
 // Migrate 在给定连接上执行指定服务的 SQL 迁移（goose Up）。
 // 使用 PostgreSQL advisory lock 防止多个服务实例并发迁移导致冲突。
-func Migrate(gormDB *gorm.DB, service string) error {
+func Migrate(ctx context.Context, gormDB *gorm.DB, service string) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
 		return err
@@ -43,6 +43,6 @@ func Migrate(gormDB *gorm.DB, service string) error {
 		return err
 	}
 
-	_, err = provider.Up(context.Background())
+	_, err = provider.Up(ctx)
 	return err
 }

@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fx0x55/micro-go-lab/common/xcache"
@@ -21,19 +22,19 @@ type ServiceContext struct {
 	Cache    *xcache.Cache
 }
 
-func NewServiceContext(c *config.Config) *ServiceContext {
+func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	gormDB, err := xdb.New(&c.Database)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	if err := xdb.Migrate(gormDB, "user"); err != nil {
+	if err := xdb.Migrate(ctx, gormDB, "user"); err != nil {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
 	var redisClient *redis.Client
 	if c.RedisCache.Host != "" {
 		var err error
-		redisClient, err = xredis.New(c.RedisCache)
+		redisClient, err = xredis.New(ctx, c.RedisCache)
 		if err != nil {
 			logx.Errorf("failed to connect redis: %v, proceeding without cache", err)
 		}
