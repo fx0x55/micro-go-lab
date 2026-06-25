@@ -12,9 +12,9 @@ Log:
 
 Database:
   Host: localhost
-  Port: 5432
-  User: postgres
-  Password: postgres
+  Port: 3306
+  User: root
+  Password: root
   DBName: users_db
   MaxOpenConns: 25
   MaxIdleConns: 10

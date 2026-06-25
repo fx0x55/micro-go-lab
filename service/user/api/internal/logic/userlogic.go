@@ -13,9 +13,9 @@ import (
 	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
+	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/zeromicro/go-zero/core/logx"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -74,7 +74,8 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error
 
 	if err := l.svcCtx.UserRepo.Create(tx, user); err != nil {
 		tx.Rollback()
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" {
+		mysqlErr := &mysql.MySQLError{}
+		if errors.As(err, &mysqlErr) {
 			return nil, ErrUserExists
 		}
 		return nil, err

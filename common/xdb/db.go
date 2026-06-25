@@ -6,20 +6,15 @@ import (
 	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-// New 初始化 PostgreSQL 连接并设置连接池参数
+// New 初始化 MySQL 连接并设置连接池参数
 func New(cfg *config.DatabaseConfig) (*gorm.DB, error) {
-	// sslmode 为空时回退到 disable，保留本地开发默认；生产经 env 配置为 require/verify-full。
-	sslmode := cfg.SSLMode
-	if sslmode == "" {
-		sslmode = "disable"
-	}
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, sslmode)
-	gormDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&charset=utf8mb4&loc=Local",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
+	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: NewGormLogger(cfg.SlowThreshold),
 	})
 	if err != nil {

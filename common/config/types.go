@@ -30,7 +30,7 @@ type GRPCConfig struct {
 
 type DatabaseConfig struct {
 	Host         string `json:",default=localhost"`
-	Port         int    `json:",default=5432"`
+	Port         int    `json:",default=3306"`
 	User         string
 	Password     string
 	DBName       string
@@ -41,20 +41,14 @@ type DatabaseConfig struct {
 	ConnMaxLifetime time.Duration `json:",default=30m"`
 	// ConnMaxIdleTime 限制连接最长空闲时间，回收池中暂时不用的连接。
 	ConnMaxIdleTime time.Duration `json:",default=5m"`
-	// SSLMode 透传 PostgreSQL sslmode；空字符串等同于 disable（保留本地开发默认）。
-	// 生产建议 require 或 verify-full。
-	SSLMode string `json:",optional"`
 	// SlowThreshold 慢查询阈值；超过此时间的 SQL 查询将被记录。
 	// 设为 0 时不记录慢查询。
 	SlowThreshold time.Duration `json:",default=200ms"`
 }
 
-// ApplyEnvOverrides 从环境变量读取连接池与 TLS 相关配置，供各服务 config 复用。
+// ApplyEnvOverrides 从环境变量读取连接池相关配置，供各服务 config 复用。
 // 解析失败的字段保持原值（通常是 YAML 默认值）。
 func (d *DatabaseConfig) ApplyEnvOverrides() {
-	if s := os.Getenv("DATABASE_SSLMODE"); s != "" {
-		d.SSLMode = s
-	}
 	if s := os.Getenv("DATABASE_CONN_MAX_LIFETIME"); s != "" {
 		if dur, err := time.ParseDuration(s); err == nil {
 			d.ConnMaxLifetime = dur

@@ -17,20 +17,18 @@ services:
       retries: 5
 
   # === Databases ===
-  postgres:
-    image: postgres:18-alpine
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: users_db
-      POSTGRES_EXTRA_DBS: orders_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: users_db
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pg-data:/var/lib/postgresql
-      - ./deploy/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh:ro
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql/init-dbs.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -56,14 +54,14 @@ services:
     labels:
       logging: "promtail"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       etcd:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis
@@ -78,14 +76,14 @@ services:
     labels:
       logging: "promtail"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       etcd:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       ETCD_HOSTS: "etcd:2379"
       ETCD_KEY: "user-svc.rpc"
       REDIS_HOST: redis
@@ -101,14 +99,14 @@ services:
     labels:
       logging: "promtail"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       user-rpc:
         condition: service_started
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
@@ -125,14 +123,14 @@ services:
       - "8080:8080"
       - "40001:40001"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       etcd:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       REDIS_HOST: redis
 
@@ -145,14 +143,14 @@ services:
       - "9090:9090"
       - "40002:40002"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       etcd:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       ETCD_HOSTS: "etcd:2379"
       ETCD_KEY: "user-svc.rpc"
       REDIS_HOST: redis
@@ -166,14 +164,14 @@ services:
       - "8081:8081"
       - "40003:40003"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       user-rpc:
         condition: service_started
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: postgres
+      DATABASE_HOST: mysql
       USERSVC_ETCD_HOSTS: "etcd:2379"
       USERSVC_ETCD_KEY: "user-svc.rpc"
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
@@ -231,4 +229,4 @@ services:
       - loki
 
 volumes:
-  pg-data:
+  mysql-data:

@@ -6,7 +6,6 @@ import (
 	"io/fs"
 
 	"github.com/pressly/goose/v3"
-	"github.com/pressly/goose/v3/lock"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +13,7 @@ import (
 var migrationsFS embed.FS
 
 // Migrate 在给定连接上执行指定服务的 SQL 迁移（goose Up）。
-// 使用 PostgreSQL advisory lock 防止多个服务实例并发迁移导致冲突。
+// goose 通过 goose_db_version 表保证幂等性，无需外部锁。
 func Migrate(ctx context.Context, gormDB *gorm.DB, service string) error {
 	sqlDB, err := gormDB.DB()
 	if err != nil {
@@ -27,17 +26,10 @@ func Migrate(ctx context.Context, gormDB *gorm.DB, service string) error {
 		return err
 	}
 
-	// 使用 PostgreSQL advisory lock 防止并发迁移。
-	locker, err := lock.NewPostgresSessionLocker()
-	if err != nil {
-		return err
-	}
-
 	provider, err := goose.NewProvider(
-		goose.DialectPostgres,
+		goose.DialectMySQL,
 		sqlDB,
 		subFS,
-		goose.WithSessionLocker(locker),
 	)
 	if err != nil {
 		return err

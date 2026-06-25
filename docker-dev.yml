@@ -16,20 +16,18 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres:
-    image: postgres:18-alpine
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: users_db
-      POSTGRES_EXTRA_DBS: orders_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: users_db
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pg-data:/var/lib/postgresql
-      - ./deploy/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh:ro
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql/init-dbs.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -96,4 +94,4 @@ services:
       - loki
 
 volumes:
-  pg-data:
+  mysql-data:

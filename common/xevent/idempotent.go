@@ -9,7 +9,7 @@ import (
 
 // ProcessedEvent 对应 processed_events 表
 type ProcessedEvent struct {
-	EventID     string    `gorm:"column:event_id;type:uuid;primaryKey"`
+	EventID     string    `gorm:"column:event_id;type:char(36);primaryKey"`
 	ProcessedAt time.Time `gorm:"column:processed_at;autoCreateTime"`
 }
 
