@@ -6,6 +6,7 @@ import (
 	"io/fs"
 
 	"github.com/pressly/goose/v3"
+	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
 
@@ -34,10 +35,15 @@ func Migrate(ctx context.Context, gormDB *gorm.DB, service string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = provider.Close()
-	}()
-
-	_, err = provider.Up(ctx)
-	return err
+	// 注意：不能 defer provider.Close()，因为 goose v3 的 Provider.Close()
+	// 会调用底层 sql.DB.Close()，关闭整个连接池，导致后续查询报
+	// "sql: database is closed"。
+	results, err := provider.Up(ctx)
+	if err != nil {
+		return err
+	}
+	for _, r := range results {
+		logx.Infof("[goose] %s", r)
+	}
+	return nil
 }

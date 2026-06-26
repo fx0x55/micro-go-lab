@@ -27,9 +27,6 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
-	if err := xdb.Migrate(ctx, gormDB, "user"); err != nil {
-		panic(fmt.Sprintf("failed to migrate: %v", err))
-	}
 
 	var redisClient *redis.Client
 	if c.RedisCache.Host != "" {

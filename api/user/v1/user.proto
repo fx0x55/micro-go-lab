@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package user.v1;
 
-option go_package = "github.com/fx0x55/micro-go-lab/service/user/rpc/pb;pb";
+option go_package = "/pb";
 
 // UserService 提供给其他微服务调用的 gRPC 接口
 service UserService {
