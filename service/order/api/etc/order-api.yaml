@@ -25,6 +25,7 @@ UserSvc:
       - localhost:2379
     Key: user-svc.rpc
   Timeout: 2000
+  BalanceName: p2c_ewma
 
 Redis:
   Host: localhost

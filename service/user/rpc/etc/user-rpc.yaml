@@ -2,6 +2,7 @@ Name: user-rpc
 ListenOn: 0.0.0.0:9090
 Mode: dev
 
+Health: true
 Etcd:
   Hosts:
     - localhost:2379
