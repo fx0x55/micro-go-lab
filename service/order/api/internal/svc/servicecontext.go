@@ -17,6 +17,7 @@ import (
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/repository"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	gozeroRedis "github.com/zeromicro/go-zero/core/stores/redis"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,7 @@ type ServiceContext struct {
 	Producer    *xstream.Producer
 	Poller      *xstream.Poller
 	Consumer    *xstream.Consumer
-	RateLimiter *middleware.RateLimiter
+	RateLimiter *middleware.RedisRateLimiter
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 }
@@ -75,7 +76,10 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 		HandleUserEvent(idempotentRepo),
 	)
 
-	rateLimiter := middleware.NewRateLimiter(ctx, 100, time.Minute)
+	rateLimiter := middleware.NewRedisRateLimiter(
+		gozeroRedis.New(c.Redis.Addr(), gozeroRedis.WithPass(c.Redis.Password)),
+		100, time.Minute, "ratelimit:order-api:",
+	)
 
 	sc := &ServiceContext{
 		Config:      *c,
