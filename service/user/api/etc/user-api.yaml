@@ -1,43 +1,180 @@
+# ============================================================
+# go-zero 内置配置（ServiceConf / RestConf）
+# 以下字段由 go-zero 框架直接解析，字段名对应 go-zero struct
+# ============================================================
+
+# 服务名称，用于日志、注册中心、监控标识
 Name: user-api
+# HTTP 监听地址
 Host: 0.0.0.0
+# HTTP 监听端口
 Port: 8080
+# 运行模式：dev | test | rt | pre | pro
+# dev/test/rt/pre 模式下会禁用负载统计和自适应降载
 Mode: dev
 
+# 是否输出详细日志（路由匹配、请求耗时等），调试用
+Verbose: true
+# # 最大并发连接数，超出返回 429
+# MaxConns: 10000
+# # 请求体最大字节数（默认 1MB = 1048576）
+# MaxBytes: 1048576
+# # 请求超时时间（毫秒）
+# Timeout: 3000
+# # CPU 降载阈值（0-1000），超过后开始拒绝新请求
+# # 900 表示 CPU 使用率达 90% 时触发，0 表示关闭降载
+# CpuThreshold: 900
+# # HTTPS 证书文件路径
+# CertFile: ""
+# KeyFile: ""
+
+# --- 日志配置（go-zero logx.LogConf） ---
 Log:
   ServiceName: user-api
+  # 输出模式：console（控制台） | file（文件） | volume（K8s 场景，文件名带主机名前缀）
   Mode: console
+  # 编码格式：json（结构化，便于 Loki 等采集） | plain（明文，开发用）
   Encoding: json
+  # 日志级别：debug | info | error | severe
   Level: debug
-  Stat: false
+  # 是否输出统计日志（QPS、慢调用等），生产环境建议开启
+  Stat: true
+  # # file/volume 模式下生效
+  # Path: logs
+  # # 日志轮转方式：daily（按天） | size（按大小）
+  # Rotation: daily
+  # # 日志保留天数，0 表示永久保留
+  # KeepDays: 7
+  # # 按大小轮转时，单个日志文件最大 MB 数，0 表示不限制
+  # MaxSize: 0
+  # # 按大小轮转时，最多保留的备份数，0 表示不限制
+  # MaxBackups: 0
+  # # 是否压缩历史日志文件
+  # Compress: false
+  # # 时间格式，Go time 格式化字符串
+  # TimeFormat: "2006-01-02T15:04:05.000Z07:00"
+  # # 栈日志冷却时间（毫秒），防止短时间内重复输出相同栈信息
+  # StackCooldownMillis: 100
 
+# --- Prometheus 指标采集（prometheus.Config） ---
+Prometheus:
+  Host: 0.0.0.0
+  # 指标暴露端口
+  Port: 9101
+  # 指标暴露路径
+  Path: /metrics
+
+# --- OpenTelemetry 分布式链路追踪（trace.Config） ---
+Telemetry:
+  # OTLP gRPC Collector 地址（Jaeger / OTEL Collector）
+  Endpoint: localhost:4317
+  # 采样率：1.0 = 100% 采样，生产环境建议 0.1 或更低
+  Sampler: 1.0
+  # 导出器类型：otlpgrpc | otlphttp | zipkin | file
+  Batcher: otlpgrpc
+  # # OTLP 额外请求头，例如 Uptrace DSN
+  # OtlpHeaders:
+  #   uptrace-dsn: "http://project2_secret_token@localhost:14317/2"
+  # # OTLP HTTP 传输路径（仅 Batcher=otlphttp 时生效）
+  # OtlpHttpPath: /v1/traces
+  # # OTLP HTTP 是否使用 HTTPS（仅 Batcher=otlphttp 时生效）
+  # OtlpHttpSecure: false
+  # # 是否禁用链路追踪
+  # Disabled: false
+
+# --- 内置中间件开关（rest.MiddlewaresConf） 全部默认 true，按需关闭 ---
+Middlewares:
+  # 链路追踪中间件
+  Trace: true
+  # 请求日志中间件
+  Log: true
+  # Prometheus 指标中间件
+  Prometheus: true
+  # 最大并发连接数限制
+  MaxConns: true
+  # 熔断器中间件
+  Breaker: true
+  # 自适应降载（Shedding）中间件
+  Shedding: true
+  # 超时控制中间件
+  Timeout: true
+  # panic 恢复中间件
+  Recover: true
+  # 指标统计中间件（QPS/耗时等）
+  Metrics: true
+  # 请求体大小限制
+  MaxBytes: true
+  # Gzip 解压中间件（处理 Content-Encoding: gzip 的请求）
+  Gunzip: true
+
+# --- 链路追踪忽略路径 ---
+TraceIgnorePaths:
+  - /healthz
+  - /metrics
+
+# --- 优雅关闭（proc.ShutdownConf） ---
+Shutdown:
+  # 收到信号后，等待 WrapUpTime 再调用 shutdown 监听器，期间允许处理中的请求完成
+  WrapUpTime: 1s
+  # 总等待时间，超时后强制退出（应 > WrapUpTime）
+  WaitTime: 5.5s
+
+# --- 内置开发服务器（devserver.Config） 默认在 6060 端口启动，提供 pprof、healthz、metrics ---
+# DevServer:
+#   # 是否启用开发服务器
+#   Enabled: true
+#   Host: 0.0.0.0
+#   Port: 6060
+#   # 健康检查路径
+#   HealthPath: /healthz
+#   # 健康检查响应体
+#   HealthResponse: "OK"
+#   # 是否暴露 Prometheus 指标（通过 DevServer 端口）
+#   EnableMetrics: true
+#   # 是否暴露 pprof 性能分析接口
+#   EnablePprof: true
+
+# ============================================================
+# 自定义业务配置（项目 common/config + 各服务 config 定义）
+# 以下字段由各服务的 Config struct 扩展，与 go-zero 无关
+# ============================================================
+
+# --- 数据库连接（common/config.DatabaseConfig） ---
 Database:
   Host: localhost
   Port: 3306
   User: root
   Password: root
   DBName: users_db
+  # 连接池中允许存在的最大连接数，包括正在使用和空闲的。当所有连接都在使用且达到上限时，新的数据库操作会被阻塞，直到有连接被释放
   MaxOpenConns: 25
+  # 连接池中保持的空闲连接的最大数量。保留空闲连接可以避免频繁创建和销毁连接的开销
   MaxIdleConns: 10
+  # 单个连接最长存活时间，防止 DB 重启 / LB 轮换后使用陈旧连接
+  ConnMaxLifetime: 30m
+  # 连接最长空闲时间，回收池中暂不使用的连接
+  ConnMaxIdleTime: 5m
+  # 慢查询阈值，超过此时间的 SQL 将被记录；设为 0 不记录慢查询
+  SlowThreshold: 200ms
 
-JWT:
-  Secret: change-me-in-production
-  Expiration: 24h
-
-Prometheus:
-  Host: 0.0.0.0
-  Port: 9101
-  Path: /metrics
-
-Telemetry:
-  Endpoint: localhost:4317
-  Sampler: 1.0
-  Batcher: otlpgrpc
-
-CORS:
-  AllowedOrigins:
-    - "*"
-
+# --- Redis（common/config.RedisConfig） ---
 Redis:
   Host: localhost
   Port: 6379
+  # 数据库编号（0-15）
   DB: 0
+  # # 连接密码
+  # Password: ""
+
+# --- JWT 认证（common/config.JWTConfig） ---
+JWT:
+  # 签名密钥，生产环境务必替换！pro/pre 模式使用默认值会拒绝启动
+  Secret: change-me-in-production
+  # Token 过期时间
+  Expiration: 24h
+
+# --- CORS 跨域（common/config.CORSConfig） ---
+CORS:
+  # 允许的来源列表；["*"] 表示允许所有来源（仅限开发环境）
+  AllowedOrigins:
+    - "*"
