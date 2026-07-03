@@ -42,7 +42,11 @@ func main() {
 		cancel()
 	})
 
-	httpSrv := rest.MustNewServer(cfg.RestConf, rest.WithNotAllowedHandler(middleware.NotAllowHandler()))
+	httpSrv := rest.MustNewServer(
+		cfg.RestConf,
+		rest.WithCors(cfg.CORS.AllowedOrigins...),
+		rest.WithNotAllowedHandler(middleware.NotAllowHandler()),
+	)
 	defer httpSrv.Stop()
 	handler.RegisterHandlers(httpSrv, svcCtx)
 

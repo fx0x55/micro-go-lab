@@ -13,20 +13,16 @@ Port: 8080
 # dev/test/rt/pre 模式下会禁用负载统计和自适应降载
 Mode: dev
 
-# 是否输出详细日志（路由匹配、请求耗时等），调试用
-Verbose: true
+# 是否输出详细日志（路由匹配、请求耗时等），调试用(生产环境禁止使用!!!)
+Verbose: false
 # # 最大并发连接数，超出返回 429
-# MaxConns: 10000
-# # 请求体最大字节数（默认 1MB = 1048576）
-# MaxBytes: 1048576
-# # 请求超时时间（毫秒）
-# Timeout: 3000
-# # CPU 降载阈值（0-1000），超过后开始拒绝新请求
-# # 900 表示 CPU 使用率达 90% 时触发，0 表示关闭降载
-# CpuThreshold: 900
-# # HTTPS 证书文件路径
-# CertFile: ""
-# KeyFile: ""
+MaxConns: 1000
+# 请求体最大字节数（默认 1MB = 1048576）
+MaxBytes: 1048576
+# 请求超时时间（毫秒）
+Timeout: 3000
+# CPU 降载阈值（0-1000），超过后开始拒绝新请求, 900 表示 CPU 使用率达 90% 时触发，0 表示关闭降载
+CpuThreshold: 900
 
 # --- 日志配置（go-zero logx.LogConf） ---
 Log:

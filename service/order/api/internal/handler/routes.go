@@ -9,8 +9,6 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
-	server.Use(middleware.RequestLogger)
-	server.Use(middleware.NewCorsMiddleware(svcCtx.Config.CORS))
 	server.Use(svcCtx.RateLimiter.Middleware)
 
 	// Health check
