@@ -13,6 +13,10 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+const (
+	maxBackoff = 10 * time.Second
+)
+
 // consumerCaller 用于日志标识 panic 发生在哪个消费者 goroutine。
 func consumerCaller(cfg ConsumerConfig) string {
 	return "consumer:" + cfg.Group + "/" + cfg.Name
@@ -65,13 +69,10 @@ func NewConsumer(rdb *redis.Client, cfg ConsumerConfig, handler Handler) *Consum
 	}
 }
 
-// Start 启动消费者（在 goroutine 中运行）。
-// ctx 取消时 goroutine 安全退出；wg 用于等待 goroutine 结束。
-func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
-	// 确保 consumer group 存在（初始化阶段，不接受外部 cancel）
-	//nolint:contextcheck // 初始化阶段，使用独立 context
+// ensureGroup 创建 consumer group（已存在则忽略）。
+func (c *Consumer) ensureGroup(ctx context.Context) {
 	if err := c.rdb.XGroupCreateMkStream(
-		context.Background(), c.cfg.Stream, c.cfg.Group, "0",
+		ctx, c.cfg.Stream, c.cfg.Group, "0",
 	).Err(); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "BUSYGROUP") {
@@ -85,6 +86,13 @@ func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
 				logx.Field("error", errMsg))
 		}
 	}
+}
+
+// Start 启动消费者（在 goroutine 中运行）。
+// ctx 取消时 goroutine 安全退出；wg 用于等待 goroutine 结束。
+func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
+	//nolint:contextcheck // 初始化阶段，使用独立 context
+	c.ensureGroup(context.Background())
 
 	// 诊断：启动时检查 stream 状态
 	//nolint:contextcheck // 初始化诊断，使用独立 context
@@ -96,7 +104,10 @@ func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
 		logx.Field("stream_length", length))
 
 	wg.Add(1)
-	go c.consume(ctx, wg)
+	go c.consume(
+		ctx,
+		wg,
+	) //nolint:gosec // G118: goroutine receives request-scoped ctx; context.Background above is for init only
 }
 
 func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
@@ -111,6 +122,7 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 		logx.Field("group", c.cfg.Group),
 		logx.Field("consumer", c.cfg.Name))
 
+	backoff := time.Second
 	for {
 		select {
 		case <-ctx.Done():
@@ -121,6 +133,7 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 		default:
 		}
 
+		var readErr error
 		RunWithRecover(ctx, caller, func(ctx context.Context) {
 			streams, err := c.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    c.cfg.Group,
@@ -130,15 +143,7 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 				Block:    2 * time.Second,
 			}).Result()
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					return
-				}
-				if errors.Is(err, redis.Nil) {
-					return
-				}
-				logx.Error("redis stream read failed",
-					logx.Field("stream", c.cfg.Stream),
-					logx.Field("error", err.Error()))
+				readErr = err
 				return
 			}
 
@@ -167,6 +172,36 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 					logx.Field("count", msgCount))
 			}
 		})
+
+		if readErr != nil {
+			if errors.Is(readErr, context.Canceled) {
+				return
+			}
+
+			// NOGROUP: consumer group 丢失（Redis 重启/key 被删），自动重建
+			if strings.Contains(readErr.Error(), "NOGROUP") {
+				logx.Info("consumer group missing, recreating",
+					logx.Field("stream", c.cfg.Stream),
+					logx.Field("group", c.cfg.Group))
+				//nolint:contextcheck // reconnection uses background to avoid racing with cancel
+				c.ensureGroup(context.Background())
+			}
+
+			// 指数退避，避免 Redis 不可用时疯狂重试打满日志
+			logx.Error("redis stream read failed, retrying",
+				logx.Field("stream", c.cfg.Stream),
+				logx.Field("error", readErr.Error()),
+				logx.Field("backoff", backoff))
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			backoff = min(backoff*2, maxBackoff)
+		} else {
+			backoff = time.Second // 成功读取，重置退避
+		}
 	}
 }
 
