@@ -1,25 +1,30 @@
-# Alertmanager 配置：负责告警的去重、分组、路由、抑制，并直接分发到飞书。
+# Alertmanager 配置：负责告警的去重、分组、路由、抑制，并直接分发到 Telegram。
 #
 # 告警流向：
 #
-#   Prometheus / Loki 规则 → Alertmanager（去重 + 分组 + 路由 + 抑制）→ 飞书 webhook
+#   Prometheus / Loki 规则 → Alertmanager（去重 + 分组 + 路由 + 抑制）→ Telegram Bot
 #
-# ── 飞书对接说明 ──────────────────────────────────────────────────────────────
-# Alertmanager 通过 webhook_configs 把告警 POST 到飞书自定义机器人。
-# 注意：飞书机器人要求的请求体格式（{"msg_type":"text","content":{...}} 或交互式卡片）
-# 与 Alertmanager 原生 webhook payload（{"version","alerts":[...]}）并不一致。
-# 因此：
-#   - 若飞书机器人开启了"自定义"消息类型并兼容原始 JSON，可直接收到告警原文；
-#   - 若需要飞书卡片渲染，需在飞书与 Alertmanager 之间加一个轻量格式转换代理
-#     （后续按需引入，不阻塞当前链路）。
+# ── Telegram 对接说明 ────────────────────────────────────────────────────────
+# Alertmanager 0.24+ 原生支持 telegram_configs，直接调用 Telegram Bot API，
+# 无需像飞书那样架设格式转换代理。
 #
-# 配置方式：把下方 <FEISHU_BOT_TOKEN> 替换为飞书自定义机器人的 webhook token，
-# 形如：https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx
+# 准备工作：
+#   1. 在 Telegram 里 @BotFather → /newbot 创建机器人，拿到 bot_token。
+#   2. 把机器人加入目标群组/频道，并给到发送消息权限。
+#   3. 获取 chat_id：
+#        - 私聊：把机器人随便发条消息，访问
+#          https://api.telegram.org/bot<TOKEN>/getUpdates，读 result[].message.chat.id。
+#        - 群组：把机器人拉进群，同样调 getUpdates，chat.id 为负数（形如 -1001234567890）。
+#   4. 把下方 <TELEGRAM_BOT_TOKEN>、<TELEGRAM_CHAT_ID> 替换为真实值。
+#      bot_token 形如 123456789:ABCdefGhI... ；chat_id 在 YAML 中为整数（群组为负数）。
+#
+# 网络注意：Telegram Bot API（api.telegram.org）在大陆默认不可直连。
+#   - 容器有透明代理 / 走海外节点时无需改动；
+#   - 否则用 api_url 指向一个可访问的 Telegram Bot API 反代地址（见下 receivers）。
 # Alertmanager 不支持配置文件内的环境变量插值，token 需直接写入或通过部署脚本注入。
 
-# 默认 webhook 前缀（替换 <FEISHU_BOT_TOKEN> 为真实 token）
-# 如启用签名校验，飞书会额外要求 timestamp + sign 参数，Alertmanager 无法计算 HMAC，
-# 故建议在飞书机器人侧关闭签名校验，或通过格式转换代理处理。
+templates:
+  - "/etc/alertmanager/telegram.tmpl"
 
 global:
   # 已恢复告警仍发送 resolve 通知的最长等待时间
@@ -46,23 +51,38 @@ route:
       receiver: "warning"
 
 receivers:
-  # 所有 receiver 直接指向飞书机器人 webhook。
-  # severity 路由在 Alertmanager 层完成，统一发到同一个飞书群。
-  # 当前 <FEISHU_BOT_TOKEN> 为占位符，部署前必须替换为真实 token。
+  # 所有 receiver 直接通过 Telegram Bot API 推送到目标 chat。
+  # severity 路由在 Alertmanager 层完成，统一发到同一个 Telegram 群。
+  # 当前 <TELEGRAM_BOT_TOKEN>、<TELEGRAM_CHAT_ID> 为占位符，部署前必须替换。
+  #
+  # 关于 api_url：默认 https://api.telegram.org。如容器无法直连 Telegram，
+  # 取消注释并改成可达的反代地址（反代需转发到 https://api.telegram.org）。
   - name: "default"
-    webhook_configs:
-      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+    telegram_configs:
+      - bot_token: "<BOT_TOKEN>"
+        chat_id: <CHAT_ID>
+        message_thread_id: <TOPIC_ID>
         send_resolved: true
+        parse_mode: "HTML"
+        message: '{{ template "tg.message" . }}'
 
   - name: "critical"
-    webhook_configs:
-      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+    telegram_configs:
+      - bot_token: "<BOT_TOKEN>"
+        chat_id: <CHAT_ID>
+        message_thread_id: <TOPIC_ID>
         send_resolved: true
+        parse_mode: "HTML"
+        message: '{{ template "tg.message" . }}'
 
   - name: "warning"
-    webhook_configs:
-      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+    telegram_configs:
+      - bot_token: "<BOT_TOKEN>"
+        chat_id: <CHAT_ID>
+        message_thread_id: <TOPIC_ID>
         send_resolved: true
+        parse_mode: "HTML"
+        message: '{{ template "tg.message" . }}'
 
 # 抑制规则：根因告警触发时，压制它引发的"症状告警"，减少噪声。
 inhibit_rules:

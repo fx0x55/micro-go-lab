@@ -1,7 +1,7 @@
 services:
   # === Infrastructure ===
   etcd:
-    image: gcr.io/etcd-development/etcd:v3.5.31
+    image: gcr.io/etcd-development/etcd:v3.6.13
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
     ports:
       - "2379:2379"
@@ -180,11 +180,11 @@ services:
   # === Monitoring (docker compose --profile monitoring up) ===
   alertmanager:
     profiles: ["monitoring"]
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:v0.33.0
     ports:
       - "9093:9093"
     volumes:
-      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/alertmanager:/etc/alertmanager:ro
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
@@ -192,18 +192,22 @@ services:
 
   prometheus:
     profiles: ["monitoring"]
-    image: prom/prometheus:v3.5.3
+    image: prom/prometheus:v3.13.0
     ports:
       - "9091:9090"
     volumes:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.external-url=http://localhost:9091"
+      - "--web.enable-lifecycle"
     depends_on:
       - alertmanager
 
   grafana:
     profiles: ["monitoring"]
-    image: grafana/grafana:13.0.2
+    image: grafana/grafana:13.1.0
     ports:
       - "3000:3000"
     environment:
@@ -224,7 +228,7 @@ services:
 
   loki:
     profiles: ["monitoring"]
-    image: grafana/loki:3.5.5
+    image: grafana/loki:3.7.3
     ports:
       - "3100:3100"
     volumes:
