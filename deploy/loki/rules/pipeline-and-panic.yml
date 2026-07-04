@@ -1,0 +1,31 @@
+# Loki ruler：基于日志内容的告警。与 Prometheus 指标告警互补——
+# 覆盖"指标看不见"的场景：panic 堆栈、安全事件、关键字错误。
+# 告警经 Alertmanager 统一分发（见 deploy/alertmanager/alertmanager.yml）。
+
+groups:
+  # Panic 复活：xstream.RunWithRecover 吞掉了 panic 但会打 error 日志，
+  # 短时间内多次出现说明某 goroutine 反复崩溃。
+  - name: panic_alerts
+    rules:
+      - alert: PanicRecoveredSpike
+        expr: sum by (service) (count_over_time({service=~".+"} | json | level="error" |= "goroutine panic recovered" [5m])) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Repeated panic recovery on {{ $labels.service }}"
+          description: "5 分钟内出现超过 3 次 goroutine panic（已被 RunWithRecover 吞掉）。虽未宕机，但对应循环可能已失效。"
+          runbook_url: "http://runbooks/panic-recovered-spike"
+
+  # 安全类：短时间内大量 401，可能是撞库或 token 泄露
+  - name: security_alerts
+    rules:
+      - alert: AuthFailureSpike
+        expr: sum by (service) (count_over_time({service=~".+"} | json | status="401" [5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate on {{ $labels.service }}"
+          description: "5 分钟内 401 超过 100 次，需排查是否为暴力破解或 JWT 密钥泄露。"
+          runbook_url: "http://runbooks/auth-failure-spike"

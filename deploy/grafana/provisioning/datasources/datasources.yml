@@ -14,3 +14,11 @@ datasources:
     type: loki
     access: proxy
     url: http://loki:3100
+  # Alertmanager：在 Grafana 内统一查看活跃告警、silence（静默）与通知状态
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false

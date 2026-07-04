@@ -1,0 +1,76 @@
+# Alertmanager 配置：负责告警的去重、分组、路由、抑制，并直接分发到飞书。
+#
+# 告警流向：
+#
+#   Prometheus / Loki 规则 → Alertmanager（去重 + 分组 + 路由 + 抑制）→ 飞书 webhook
+#
+# ── 飞书对接说明 ──────────────────────────────────────────────────────────────
+# Alertmanager 通过 webhook_configs 把告警 POST 到飞书自定义机器人。
+# 注意：飞书机器人要求的请求体格式（{"msg_type":"text","content":{...}} 或交互式卡片）
+# 与 Alertmanager 原生 webhook payload（{"version","alerts":[...]}）并不一致。
+# 因此：
+#   - 若飞书机器人开启了"自定义"消息类型并兼容原始 JSON，可直接收到告警原文；
+#   - 若需要飞书卡片渲染，需在飞书与 Alertmanager 之间加一个轻量格式转换代理
+#     （后续按需引入，不阻塞当前链路）。
+#
+# 配置方式：把下方 <FEISHU_BOT_TOKEN> 替换为飞书自定义机器人的 webhook token，
+# 形如：https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx
+# Alertmanager 不支持配置文件内的环境变量插值，token 需直接写入或通过部署脚本注入。
+
+# 默认 webhook 前缀（替换 <FEISHU_BOT_TOKEN> 为真实 token）
+# 如启用签名校验，飞书会额外要求 timestamp + sign 参数，Alertmanager 无法计算 HMAC，
+# 故建议在飞书机器人侧关闭签名校验，或通过格式转换代理处理。
+
+global:
+  # 已恢复告警仍发送 resolve 通知的最长等待时间
+  resolve_timeout: 5m
+
+# 根路由：所有告警先匹配子路由，未命中则走 default。
+route:
+  receiver: "default"
+  group_by: ["alertname", "job", "severity"]
+  # 首次告警等待窗口：同组告警在此窗口内合并，避免风暴时逐条轰炸
+  group_wait: 30s
+  # 同组后续告警的合并间隔
+  group_interval: 5m
+  # 同一告警重复通知的最小间隔（4h = 一个值班班次内最多提醒一次）
+  repeat_interval: 4h
+  routes:
+    # critical：立即通知，不等待 group_wait
+    - matchers: ["severity=critical"]
+      receiver: "critical"
+      group_wait: 0s
+      repeat_interval: 1h
+    # warning：按组批量通知
+    - matchers: ["severity=warning"]
+      receiver: "warning"
+
+receivers:
+  # 所有 receiver 直接指向飞书机器人 webhook。
+  # severity 路由在 Alertmanager 层完成，统一发到同一个飞书群。
+  # 当前 <FEISHU_BOT_TOKEN> 为占位符，部署前必须替换为真实 token。
+  - name: "default"
+    webhook_configs:
+      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+        send_resolved: true
+
+  - name: "critical"
+    webhook_configs:
+      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+        send_resolved: true
+
+  - name: "warning"
+    webhook_configs:
+      - url: "https://open.feishu.cn/open-apis/bot/v2/hook/<FEISHU_BOT_TOKEN>"
+        send_resolved: true
+
+# 抑制规则：根因告警触发时，压制它引发的"症状告警"，减少噪声。
+inhibit_rules:
+  # 服务整体不可用时，压制该服务派生的错误率/延迟告警（它们只是症状）
+  - source_matchers: ['alertname="ServiceDown"']
+    target_matchers: ['severity=~"warning|info"']
+    equal: ["job"]
+  # DB 连接池耗尽时，压制派生的业务错误率告警
+  - source_matchers: ['alertname="DBConnectionSaturation"']
+    target_matchers: ['alertname="HighErrorRate"']
+    equal: ["job"]

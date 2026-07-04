@@ -29,4 +29,13 @@ limits_config:
   allow_structured_metadata: false
 
 ruler:
-  alertmanager_url: http://localhost:9093
+  # compose 网络内必须用服务名 alertmanager，localhost 指向的是 Loki 容器自身
+  alertmanager_url: http://alertmanager:9093
+  # 启用本地规则文件（log-based alerting）。规则目录见 deploy/loki/rules/
+  # rule_path 需与 docker-compose 挂载路径一致
+  rule_path: /etc/loki/rules
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules
+  enable_alertmanager_v2: true

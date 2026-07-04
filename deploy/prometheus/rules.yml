@@ -1,26 +1,49 @@
+# 告警规则 + Recording rules。
+# 命名约定：service:metric_name:window 形式的 record 供告警与 Grafana Dashboard 共用，
+# 保证"图表上看到的"和"触发告警的"是同一个表达式，避免语义漂移。
+
 groups:
+  # ── Recording rules ──────────────────────────────────────────────────────
+  # 预计算表达式：告警与 Dashboard 共用同一组指标，查询更便宜、语义一致。
+  - name: recording_rules
+    rules:
+      - record: job:http_5xx_rate:5m
+        expr: sum(rate(http_server_requests_code_total{code=~"5.."}[5m])) by (job)
+      - record: job:http_request_rate:5m
+        expr: sum(rate(http_server_requests_code_total[5m])) by (job)
+      - record: job:http_error_ratio:5m
+        expr: job:http_5xx_rate:5m / clamp_min(job:http_request_rate:5m, 1)
+      - record: job:http_p99_latency_ms:5m
+        expr: histogram_quantile(0.99, sum(rate(http_server_requests_duration_ms_bucket[5m])) by (le, job))
+      - record: job:db_conn_usage_ratio
+        expr: go_sql_in_use_connections{db!=""} / clamp_min(go_sql_max_open_connections{db!=""}, 1)
+
+  # ── RED 告警 ─────────────────────────────────────────────────────────────
   - name: error_rate_alerts
     rules:
       - alert: HighErrorRate
-        expr: sum(rate(http_server_requests_code_total{code=~"5.."}[5m])) by (job) / sum(rate(http_server_requests_code_total[5m])) by (job) > 0.05
+        expr: job:http_error_ratio:5m > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High 5xx error rate on {{ $labels.job }}"
-          description: "5xx error rate is above 5% ({{ $value | humanizePercentage }})"
+          description: "5xx error rate is above 5% ({{ $value | humanizePercentage }})。见 Grafana RED 面板定位热点 path。"
+          runbook_url: "http://runbooks/high-error-rate"
 
   - name: latency_alerts
     rules:
       - alert: HighLatencyP99
-        expr: histogram_quantile(0.99, sum(rate(http_server_requests_duration_ms_bucket[5m])) by (le, job)) > 1000
+        expr: job:http_p99_latency_ms:5m > 1000
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High p99 latency on {{ $labels.job }}"
-          description: "P99 latency is above 1s ({{ $value }}ms)"
+          description: "P99 latency is above 1s ({{ $value }}ms)。优先排查下游 RPC（user-rpc）与 DB 慢查询。"
+          runbook_url: "http://runbooks/high-latency-p99"
 
+  # ── 依赖与熔断 ────────────────────────────────────────────────────────────
   - name: circuit_breaker_alerts
     rules:
       - alert: CircuitBreakerOpen
@@ -30,15 +53,65 @@ groups:
           severity: critical
         annotations:
           summary: "Circuit breaker is rejecting requests"
-          description: "RPC calls are being rejected by circuit breaker ({{ $value }} rejected)"
+          description: "RPC calls are being rejected by circuit breaker ({{ $value }} rejected)。user-rpc 可能不可用，见熔断恢复手册。"
+          runbook_url: "http://runbooks/circuit-breaker-open"
 
+  # ── 数据库 ────────────────────────────────────────────────────────────────
   - name: database_alerts
     rules:
       - alert: DBConnectionSaturation
-        expr: go_sql_in_use_connections{db!=""} / go_sql_max_open_connections{db!=""} > 0.8
+        expr: job:db_conn_usage_ratio > 0.8
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Database connection pool saturation on {{ $labels.db }}"
-          description: "DB connections are above 80% capacity ({{ $value | humanizePercentage }})"
+          description: "DB connections are above 80% capacity ({{ $value | humanizePercentage }})。检查慢查询与 MaxOpenConns 配置。"
+          runbook_url: "http://runbooks/db-connection-saturation"
+
+  # ── 可用性 ────────────────────────────────────────────────────────────────
+  - name: availability_alerts
+    rules:
+      # 服务连续 1 分钟抓取失败：最优先的 critical 告警（其他告警的前提）
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.instance }} 已连续 1 分钟无法抓取。Prometheus 可能完全收不到该服务的指标，需先恢复抓取。"
+          runbook_url: "http://runbooks/service-down"
+      # 抓取本身频繁失败（目标存活但 /metrics 不稳），早于数据空洞
+      - alert: ScrapeFailureRate
+        expr: rate(prometheus_target_scrape_pool_targets{state="down"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Prometheus scrape failures"
+          description: "部分抓取目标持续失败，可能导致指标空洞与告警漏报。"
+
+  # ── 异步管道健康 ──────────────────────────────────────────────────────────
+  - name: pipeline_alerts
+    rules:
+      # Outbox 事件积压：连续 10 分钟发布失败未恢复
+      - alert: OutboxStuck
+        expr: sum(rate(outbox_events_published_total{result="error"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox events are not draining"
+          description: "事件持续 10 分钟发布失败。检查 Redis 连接与 poller goroutine 状态。"
+          runbook_url: "http://runbooks/outbox-stuck"
+      # Redis Stream 消费持续失败：消费者侧处理报错
+      - alert: StreamConsumeErrorRate
+        expr: sum(rate(redis_stream_messages_consumed_total{result="error"}[5m])) by (topic, group) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis Stream consume errors on {{ $labels.topic }}"
+          description: "{{ $labels.group }} 持续消费失败，消息可能堆积。检查消费者逻辑与 dead-letter。"
+          runbook_url: "http://runbooks/stream-consume-error"
