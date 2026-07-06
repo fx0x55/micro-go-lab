@@ -13,7 +13,7 @@ type OrderRepositoryInterface interface {
 	FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Order, error)
 	FindByUserID(ctx context.Context, userID uint) ([]model.Order, error)
 	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error)
-	Update(ctx context.Context, order *model.Order) (int64, error)
+	UpdateStatus(ctx context.Context, userID, id uint, fromStatus, toStatus string, version int) (int64, error)
 }
 
 type OrderRepository struct {
@@ -39,7 +39,7 @@ func (r *OrderRepository) FindByIDAndUserID(ctx context.Context, id, userID uint
 
 func (r *OrderRepository) FindByUserID(ctx context.Context, userID uint) ([]model.Order, error) {
 	var orders []model.Order
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&orders).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("id DESC").Find(&orders).Error
 	return orders, err
 }
 
@@ -56,11 +56,22 @@ func (r *OrderRepository) FindByUserIDWithPage(
 		return nil, 0, err
 	}
 
-	err := db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&orders).Error
+	err := db.Order("id DESC").Offset(offset).Limit(limit).Find(&orders).Error
 	return orders, total, err
 }
 
-func (r *OrderRepository) Update(ctx context.Context, order *model.Order) (int64, error) {
-	result := r.db.WithContext(ctx).Save(order)
+func (r *OrderRepository) UpdateStatus(
+	ctx context.Context,
+	userID, id uint,
+	fromStatus, toStatus string,
+	version int,
+) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Model(&model.Order{}).
+		Where("id = ? AND user_id = ? AND status = ? AND version = ?", id, userID, fromStatus, version).
+		Updates(map[string]any{
+			"status":  toStatus,
+			"version": gorm.Expr("version + 1"),
+		})
 	return result.RowsAffected, result.Error
 }

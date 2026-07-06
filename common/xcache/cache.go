@@ -79,7 +79,8 @@ func GetOrLoad[T any](
 		if v, uerr := unmarshal(val); uerr == nil {
 			return v, nil
 		}
-		// 反序列化失败视为未命中，继续回源。
+		// 反序列化失败（缓存格式过期等），清理脏 key 后回源。
+		c.rdb.Del(ctx, full)
 	}
 	// redis.Nil 或任何 Get 错误都视为未命中。
 

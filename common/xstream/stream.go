@@ -14,7 +14,9 @@ import (
 )
 
 const (
-	maxBackoff = 10 * time.Second
+	maxBackoff     = 10 * time.Second
+	pendingIdleMin = 30 * time.Second
+	pendingCount   = 10
 )
 
 // consumerCaller 用于日志标识 panic 发生在哪个消费者 goroutine。
@@ -91,23 +93,55 @@ func (c *Consumer) ensureGroup(ctx context.Context) {
 // Start 启动消费者（在 goroutine 中运行）。
 // ctx 取消时 goroutine 安全退出；wg 用于等待 goroutine 结束。
 func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
-	//nolint:contextcheck // 初始化阶段，使用独立 context
-	c.ensureGroup(context.Background())
-
-	// 诊断：启动时检查 stream 状态
-	//nolint:contextcheck // 初始化诊断，使用独立 context
-	length, _ := c.rdb.XLen(context.Background(), c.cfg.Stream).Result()
-	logx.Info("consumer starting",
-		logx.Field("stream", c.cfg.Stream),
-		logx.Field("group", c.cfg.Group),
-		logx.Field("consumer", c.cfg.Name),
-		logx.Field("stream_length", length))
-
 	wg.Add(1)
-	go c.consume(
-		ctx,
-		wg,
-	) //nolint:gosec // G118: goroutine receives request-scoped ctx; context.Background above is for init only
+	go c.consume(ctx, wg)
+}
+
+func (c *Consumer) claimPending(ctx context.Context) {
+	cursor := "0-0"
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		msgs, newCursor, err := c.rdb.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+			Stream:   c.cfg.Stream,
+			Group:    c.cfg.Group,
+			Consumer: c.cfg.Name,
+			MinIdle:  pendingIdleMin,
+			Start:    cursor,
+			Count:    pendingCount,
+		}).Result()
+		if err != nil {
+			logx.Error("XAUTOCLAIM failed",
+				logx.Field("stream", c.cfg.Stream),
+				logx.Field("error", err.Error()))
+			return
+		}
+
+		for _, msg := range msgs {
+			if err := c.handler(toStringMap(msg.Values)); err != nil {
+				logx.Error("pending message handler failed",
+					logx.Field("stream", c.cfg.Stream),
+					logx.Field("id", msg.ID),
+					logx.Field("error", err.Error()))
+				xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "error").Inc()
+				continue
+			}
+			_ = c.rdb.XAck(ctx, c.cfg.Stream, c.cfg.Group, msg.ID).Err()
+			xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "success").Inc()
+		}
+
+		if len(msgs) > 0 {
+			logx.Info("claimed pending messages",
+				logx.Field("stream", c.cfg.Stream),
+				logx.Field("count", len(msgs)))
+		}
+
+		if newCursor == "0-0" {
+			return
+		}
+		cursor = newCursor
+	}
 }
 
 func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
@@ -116,6 +150,18 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 	caller := consumerCaller(c.cfg)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	c.ensureGroup(ctx)
+
+	length, _ := c.rdb.XLen(ctx, c.cfg.Stream).Result()
+	logx.Info("consumer starting",
+		logx.Field("stream", c.cfg.Stream),
+		logx.Field("group", c.cfg.Group),
+		logx.Field("consumer", c.cfg.Name),
+		logx.Field("stream_length", length))
+
+	// 启动时先认领上次未 ACK 的 pending 消息（at-least-once 保证）
+	c.claimPending(ctx)
 
 	logx.Info("consumer loop started",
 		logx.Field("stream", c.cfg.Stream),
@@ -178,13 +224,13 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			}
 
-			// NOGROUP: consumer group 丢失（Redis 重启/key 被删），自动重建
+			// NOGROUP: consumer group 丢失（Redis 重启/key 被删），自动重建。
+			// context.Canceled 在上方已拦截，到达此处 ctx 必定未取消。
 			if strings.Contains(readErr.Error(), "NOGROUP") {
 				logx.Info("consumer group missing, recreating",
 					logx.Field("stream", c.cfg.Stream),
 					logx.Field("group", c.cfg.Group))
-				//nolint:contextcheck // reconnection uses background to avoid racing with cancel
-				c.ensureGroup(context.Background())
+				c.ensureGroup(ctx)
 			}
 
 			// 指数退避，避免 Redis 不可用时疯狂重试打满日志
@@ -201,6 +247,8 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 			backoff = min(backoff*2, maxBackoff)
 		} else {
 			backoff = time.Second // 成功读取，重置退避
+			// 每轮成功读取后，扫描是否有残留 pending 消息
+			c.claimPending(ctx)
 		}
 	}
 }

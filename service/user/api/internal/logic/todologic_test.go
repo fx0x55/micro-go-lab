@@ -264,13 +264,8 @@ func TestUpdateTodoLogic_Update(t *testing.T) {
 
 				// Mock Update
 				mockTodoRepo.EXPECT().
-					Update(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, todo *model.Todo) error {
-						// 验证更新的字段
-						assert.Equal(t, newTitle, todo.Title)
-						assert.Equal(t, newCompleted, todo.Completed)
-						return nil
-					}).
+					Update(gomock.Any(), uint(1), uint(1), newTitle, newCompleted).
+					Return(nil).
 					Times(1)
 			},
 			expectedTodo: &model.Todo{
@@ -332,12 +327,6 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 		TodoRepo: mockTodoRepo,
 	}
 
-	testTodo := &model.Todo{
-		BaseModel: model.BaseModel{Model: gorm.Model{ID: 1}},
-		UserID:    1,
-		Title:     testTodoTitle,
-	}
-
 	tests := []struct {
 		name        string
 		userID      uint
@@ -350,15 +339,9 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 			userID: 1,
 			todoID: 1,
 			mockSetup: func() {
-				// Mock FindByIDAndUserID (验证存在性)
+				// Mock Delete (single SQL with ownership check)
 				mockTodoRepo.EXPECT().
-					FindByIDAndUserID(gomock.Any(), uint(1), uint(1)).
-					Return(testTodo, nil).
-					Times(1)
-
-				// Mock Delete
-				mockTodoRepo.EXPECT().
-					Delete(gomock.Any(), uint(1)).
+					Delete(gomock.Any(), uint(1), uint(1)).
 					Return(nil).
 					Times(1)
 			},
@@ -370,8 +353,8 @@ func TestDeleteTodoLogic_Delete(t *testing.T) {
 			todoID: 999,
 			mockSetup: func() {
 				mockTodoRepo.EXPECT().
-					FindByIDAndUserID(gomock.Any(), uint(999), uint(1)).
-					Return(nil, gorm.ErrRecordNotFound).
+					Delete(gomock.Any(), uint(1), uint(999)).
+					Return(ErrTodoNotFound).
 					Times(1)
 			},
 			expectedErr: ErrTodoNotFound,

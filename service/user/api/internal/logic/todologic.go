@@ -103,6 +103,7 @@ func NewUpdateTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Update
 }
 
 func (l *UpdateTodoLogic) Update(userID, id uint, req *types.UpdateTodoRequest) (*model.Todo, error) {
+	// 先查询用于返回结果
 	todo, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -111,16 +112,21 @@ func (l *UpdateTodoLogic) Update(userID, id uint, req *types.UpdateTodoRequest) 
 		return nil, err
 	}
 
+	title := todo.Title
+	completed := todo.Completed
 	if req.Title != nil {
-		todo.Title = *req.Title
+		title = *req.Title
 	}
 	if req.Completed != nil {
-		todo.Completed = *req.Completed
+		completed = *req.Completed
 	}
 
-	if err := l.svcCtx.TodoRepo.Update(l.ctx, todo); err != nil {
+	if err := l.svcCtx.TodoRepo.Update(l.ctx, userID, id, title, completed); err != nil {
 		return nil, err
 	}
+
+	todo.Title = title
+	todo.Completed = completed
 	return todo, nil
 }
 
@@ -139,12 +145,5 @@ func NewDeleteTodoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteTodoLogic) Delete(userID, id uint) error {
-	// 先验证存在性及所有权，再执行删除
-	if _, err := l.svcCtx.TodoRepo.FindByIDAndUserID(l.ctx, id, userID); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrTodoNotFound
-		}
-		return err
-	}
-	return l.svcCtx.TodoRepo.Delete(l.ctx, id)
+	return l.svcCtx.TodoRepo.Delete(l.ctx, userID, id)
 }

@@ -55,17 +55,17 @@ func (mr *MockTodoRepositoryInterfaceMockRecorder) Create(ctx, todo any) *gomock
 }
 
 // Delete mocks base method.
-func (m *MockTodoRepositoryInterface) Delete(ctx context.Context, id uint) error {
+func (m *MockTodoRepositoryInterface) Delete(ctx context.Context, userID, id uint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, id)
+	ret := m.ctrl.Call(m, "Delete", ctx, userID, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockTodoRepositoryInterfaceMockRecorder) Delete(ctx, id any) *gomock.Call {
+func (mr *MockTodoRepositoryInterfaceMockRecorder) Delete(ctx, userID, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockTodoRepositoryInterface)(nil).Delete), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockTodoRepositoryInterface)(nil).Delete), ctx, userID, id)
 }
 
 // FindByIDAndUserID mocks base method.
@@ -115,15 +115,15 @@ func (mr *MockTodoRepositoryInterfaceMockRecorder) FindByUserIDWithPage(ctx, use
 }
 
 // Update mocks base method.
-func (m *MockTodoRepositoryInterface) Update(ctx context.Context, todo *model.Todo) error {
+func (m *MockTodoRepositoryInterface) Update(ctx context.Context, userID, id uint, title string, completed bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", ctx, todo)
+	ret := m.ctrl.Call(m, "Update", ctx, userID, id, title, completed)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockTodoRepositoryInterfaceMockRecorder) Update(ctx, todo any) *gomock.Call {
+func (mr *MockTodoRepositoryInterfaceMockRecorder) Update(ctx, userID, id, title, completed any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTodoRepositoryInterface)(nil).Update), ctx, todo)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTodoRepositoryInterface)(nil).Update), ctx, userID, id, title, completed)
 }

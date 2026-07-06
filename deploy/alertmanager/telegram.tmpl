@@ -1,20 +1,15 @@
 {{- /*
   Telegram 告警模板（HTML parse_mode）
-  设计目标：一眼看清 —— 状态 · 严重度 · 是什么 · 关键上下文 · 处置入口
 
-  排版约定（区块靠运行时换行 {{ "\n" }} 控制，不依赖模板源换行，
-  避免被 -}} 的空白修剪误伤）：
-    标题行        →  🌡 severity · alertname
-    （空行）
-    📝 摘要
-    （空行）
-    💬 描述
-    结构化标签    →   <code>key</code> → value（紧贴描述，作为细节）
-    （空行）
-    ⏱ 时间
-    （空行）
-    📘 Runbook  ·  🔗 查看表达式
+  设计目标：
+    - 状态一眼可辨（🔥 FIRING / ✅ RESOLVED）
+    - severity 通过 emoji 着色
+    - 只展示关键字段（job / instance / severity），不输出全部 Labels
+    - 多告警聚合显示，带编号
+    - Resolved 自动计算持续时间
+    - 支持 Runbook / Prometheus 表达式链接
 
+  排版约定（区块靠运行时换行 {{ "\n" }} 控制，避免 -}} 空白修剪误伤）。
   HTML 转义：Telegram HTML 只需转义 & < >，封装在 tg.escape。
 */ -}}
 
@@ -23,39 +18,90 @@
 {{- end -}}
 
 {{- define "tg.sev.emoji" -}}
-{{- if eq . "critical" }}🔥{{ else if eq . "warning" }}⚠️{{ else if eq . "info" }}💡{{ else }}📌{{ end -}}
+{{- if eq . "critical" }}🔴{{ else if eq . "warning" }}🟡{{ else if eq . "info" }}🔵{{ else }}📌{{ end -}}
 {{- end -}}
 
 {{- define "tg.sev.label" -}}
 {{- if eq . "critical" }}CRITICAL{{ else if eq . "warning" }}WARNING{{ else if eq . "info" }}INFO{{ else if eq . "" }}ALERT{{ else }}{{ toUpper . }}{{ end -}}
 {{- end -}}
 
-{{- /* 单条告警卡片 */ -}}
+{{- /* ── 单条告警卡片 ── */ -}}
 {{- define "tg.alert" -}}
 {{- $a := . -}}
 {{- $sev := index $a.Labels "severity" -}}
 {{- $name := index $a.Labels "alertname" -}}
-{{- if eq $a.Status "resolved" }}🟢 <b>✅ RESOLVED</b>{{ else }}{{ template "tg.sev.emoji" $sev }} <b>{{ template "tg.sev.label" $sev }}</b>{{ end }}{{ if $name }} · {{ template "tg.escape" $name }}{{ end -}}
-{{- with $a.Annotations.summary }}{{ "\n\n" }}📝 {{ template "tg.escape" . }}{{ end -}}
-{{- with $a.Annotations.description }}{{ "\n\n" }}💬 {{ template "tg.escape" . }}{{ end -}}
-{{- range $k, $v := $a.Labels -}}
-{{- if and (ne $k "alertname") (ne $k "severity") }}{{ "\n" }}   <code>{{ $k }}</code> → {{ template "tg.escape" $v }}{{ end -}}
-{{- end -}}
-{{- if eq $a.Status "resolved" }}{{ "\n\n" }}⏱ {{ $a.StartsAt.Format "01-02 15:04:05" }} → {{ $a.EndsAt.Format "15:04:05" }}{{ else }}{{ "\n\n" }}⏱ {{ $a.StartsAt.Format "2006-01-02 15:04:05" }}{{ end -}}
-{{- if or $a.GeneratorURL $a.Annotations.runbook_url -}}
-{{- "\n\n" -}}
-{{- if $a.Annotations.runbook_url }}📘 <a href="{{ template "tg.escape" $a.Annotations.runbook_url }}">Runbook</a>{{ end -}}
-{{- if and $a.GeneratorURL $a.Annotations.runbook_url }}  ·  {{ end -}}
-{{- if $a.GeneratorURL }}🔗 <a href="{{ template "tg.escape" $a.GeneratorURL }}">查看表达式</a>{{ end -}}
-{{- end -}}
+{{- $job := index $a.Labels "job" -}}
+{{- $inst := index $a.Labels "instance" -}}
+{{- $idx := .idx -}}
+
+<b>{{ $idx }}. {{ template "tg.escape" $name }}</b>
+
+{{- if $job }}
+
+<b>Service</b>:
+<code>{{ template "tg.escape" $job }}</code>
 {{- end -}}
 
-{{- /* 顶层消息：多条则加 group header，逐条渲染卡片 */ -}}
+{{- if $inst }}
+
+<b>Instance</b>:
+<code>{{ template "tg.escape" $inst }}</code>
+{{- end -}}
+
+<b>Severity</b>:
+{{ template "tg.sev.emoji" $sev }} <b>{{ template "tg.sev.label" $sev }}</b>
+
+{{- with $a.Annotations.summary }}
+
+<b>Summary</b>:
+{{ template "tg.escape" . }}
+{{- end -}}
+
+{{- with $a.Annotations.description }}
+
+<b>Description</b>:
+{{ template "tg.escape" . }}
+{{- end -}}
+
+{{- if eq $a.Status "resolved" }}
+
+<b>Recovered</b>:
+{{ $a.EndsAt.Local.Format "2006-01-02 15:04:05" }}
+
+<b>Duration</b>:
+{{ $a.EndsAt.Sub $a.StartsAt }}
+{{- else }}
+
+<b>Started</b>:
+{{ $a.StartsAt.Local.Format "2006-01-02 15:04:05" }}
+{{- end -}}
+
+{{- if or $a.GeneratorURL $a.Annotations.runbook_url }}
+{{ "\n" -}}
+{{- if $a.GeneratorURL }}🔗 <a href="{{ $a.GeneratorURL }}">Prometheus</a>{{ end -}}
+{{- if and $a.GeneratorURL $a.Annotations.runbook_url }}{{ "  " }}{{ end -}}
+{{- if $a.Annotations.runbook_url }}📖 <a href="{{ $a.Annotations.runbook_url }}">Runbook</a>{{ end -}}
+{{- end -}}
+
+{{- end -}}
+
+{{- /* ── 顶层消息 ── */ -}}
 {{- define "tg.message" -}}
 {{- $alerts := .Alerts -}}
-{{- if gt (len $alerts) 1 }}📦 <b>{{ len $alerts }} 条告警</b>{{ if .CommonLabels.alertname }} · {{ template "tg.escape" .CommonLabels.alertname }}{{ end }}{{ "\n\n" }}{{ end -}}
-{{- range $i, $a := $alerts -}}
-{{- if gt $i 0 }}{{ "\n\n" }}{{ end -}}
-{{ template "tg.alert" $a }}
-{{- end -}}
+{{- $count := len $alerts -}}
+
+{{- if eq $.Status "firing" }}
+🔥 <b>{{ $count }} Alert{{ if gt $count 1 }}s{{ end }} Firing</b>
+{{- else }}
+✅ <b>{{ $count }} Alert{{ if gt $count 1 }}s{{ end }} Resolved</b>
+{{- end }}
+{{ "\n" -}}
+{{ range $i, $a := $alerts }}
+{{- if gt $i 0 }}
+{{ "\n" }}--------------------------------{{ "\n" }}
+{{- end }}
+{{- /* 把索引注入 Alert 对象，供 tg.alert 读取 */ -}}
+{{- $enriched := dict "Labels" $a.Labels "Annotations" $a.Annotations "Status" $a.Status "StartsAt" $a.StartsAt "EndsAt" $a.EndsAt "GeneratorURL" $a.GeneratorURL "idx" $i -}}
+{{ template "tg.alert" $enriched }}
+{{- end }}
 {{- end -}}

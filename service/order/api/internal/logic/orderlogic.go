@@ -110,52 +110,39 @@ func (l *CreateOrderLogic) createOrder(userID uint, req *types.CreateOrderReques
 		Status:      model.StatusPending,
 	}
 
-	// 开启事务：写 order + outbox event 原子操作
-	tx := l.svcCtx.DB.Begin()
-	if tx.Error != nil {
-		return nil, ecode.ErrInternal
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
+	err = l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		if err := l.svcCtx.OrderRepo.Create(tx, order); err != nil {
+			return err
 		}
-	}()
 
-	if err := l.svcCtx.OrderRepo.Create(tx, order); err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
-	// 写 outbox event（同一事务）
-	payload, _ := json.Marshal(xevent.Envelope{
-		Event:      xevent.OrderCreated,
-		Version:    1,
-		OccurredAt: time.Now(),
-		Data: xevent.OrderCreatedData{
-			OrderID:     order.ID,
-			UserID:      order.UserID,
-			ProductName: order.ProductName,
-			Amount:      order.Amount,
-			Status:      order.Status,
-		},
+		payload, err := json.Marshal(xevent.Envelope{
+			Event:      xevent.OrderCreated,
+			Version:    1,
+			OccurredAt: time.Now(),
+			Data: xevent.OrderCreatedData{
+				OrderID:     order.ID,
+				UserID:      order.UserID,
+				ProductName: order.ProductName,
+				Amount:      order.Amount,
+				Status:      order.Status,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		outboxEvent := &xevent.OutboxEvent{
+			EventID:   uuid.New().String(),
+			Topic:     xevent.TopicOrderEvents,
+			EventKey:  strconv.FormatUint(uint64(order.UserID), 10),
+			EventType: string(xevent.OrderCreated),
+			Version:   1,
+			Payload:   string(payload),
+			Status:    xevent.OutboxStatusPending,
+		}
+		return l.svcCtx.OutboxRepo.Insert(tx, outboxEvent)
 	})
-	outboxEvent := &xevent.OutboxEvent{
-		EventID:   uuid.New().String(),
-		Topic:     xevent.TopicOrderEvents,
-		EventKey:  strconv.FormatUint(uint64(order.UserID), 10),
-		EventType: string(xevent.OrderCreated),
-		Version:   1,
-		Payload:   string(payload),
-		Status:    xevent.OutboxStatusPending,
-	}
-	if err := l.svcCtx.OutboxRepo.Insert(tx, outboxEvent); err != nil {
-		tx.Rollback()
-		return nil, ecode.ErrInternal
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, ecode.ErrInternal
+	if err != nil {
+		return nil, err
 	}
 
 	return order, nil
@@ -257,14 +244,15 @@ func (l *UpdateOrderStatusLogic) UpdateStatus(
 		return nil, ErrInvalidStatusTransition
 	}
 
-	order.Status = req.Status
-	affected, err := l.svcCtx.OrderRepo.Update(l.ctx, order)
+	affected, err := l.svcCtx.OrderRepo.UpdateStatus(l.ctx, userID, id, order.Status, req.Status, order.Version)
 	if err != nil {
 		return nil, err
 	}
 	if affected == 0 {
 		return nil, ecode.ErrOptimisticConflict
 	}
+
+	order.Status = req.Status
 	return order, nil
 }
 

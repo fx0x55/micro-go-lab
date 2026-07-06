@@ -15,8 +15,8 @@ type TodoRepositoryInterface interface {
 	FindByIDAndUserID(ctx context.Context, id, userID uint) (*model.Todo, error)
 	FindByUserID(ctx context.Context, userID uint) ([]model.Todo, error)
 	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Todo, int64, error)
-	Update(ctx context.Context, todo *model.Todo) error
-	Delete(ctx context.Context, id uint) error
+	Update(ctx context.Context, userID, id uint, title string, completed bool) error
+	Delete(ctx context.Context, userID, id uint) error
 }
 
 type TodoRepository struct {
@@ -42,7 +42,7 @@ func (r *TodoRepository) FindByIDAndUserID(ctx context.Context, id, userID uint)
 
 func (r *TodoRepository) FindByUserID(ctx context.Context, userID uint) ([]model.Todo, error) {
 	var todos []model.Todo
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&todos).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("id DESC").Find(&todos).Error
 	return todos, err
 }
 
@@ -61,29 +61,34 @@ func (r *TodoRepository) FindByUserIDWithPage(
 	if total == 0 {
 		return todos, 0, nil
 	}
-	todos, err = db.Order("created_at DESC").Offset(offset).Limit(limit).Find(ctx)
+	todos, err = db.Order("id DESC").Offset(offset).Limit(limit).Find(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 	return todos, total, nil
 }
 
-func (r *TodoRepository) Update(ctx context.Context, todo *model.Todo) error {
-	result := r.db.WithContext(ctx).Updates(map[string]any{
-		"title":     todo.Title,
-		"completed": todo.Completed,
-	})
+func (r *TodoRepository) Update(ctx context.Context, userID, id uint, title string, completed bool) error {
+	result := r.db.WithContext(ctx).
+		Model(&model.Todo{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]any{
+			"title":     title,
+			"completed": completed,
+		})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return ecode.ErrOptimisticConflict
+		return ecode.ErrTodoNotFound
 	}
 	return nil
 }
 
-func (r *TodoRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&model.Todo{}, id)
+func (r *TodoRepository) Delete(ctx context.Context, userID, id uint) error {
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&model.Todo{})
 	if result.Error != nil {
 		return result.Error
 	}

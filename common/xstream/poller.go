@@ -79,17 +79,6 @@ func (p *Poller) tick(ctx context.Context) {
 	for i := range events {
 		event := &events[i]
 
-		// 重试次数超限，标记为 failed 并跳过
-		if event.RetryCount >= xevent.MaxRetries {
-			logx.Error("outbox event max retries exceeded",
-				logx.Field("event_id", event.EventID),
-				logx.Field("retry_count", event.RetryCount))
-			if err := p.outboxRepo.MarkAsFailed(event.ID, "max retries exceeded"); err != nil {
-				logx.Error("outbox mark failed", logx.Field("id", event.ID), logx.Field("error", err.Error()))
-			}
-			continue
-		}
-
 		values := map[string]string{
 			"event":       event.EventType,
 			"event_id":    event.EventID,

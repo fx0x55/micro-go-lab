@@ -1,4 +1,4 @@
-//go:build ignore
+//go:build integration
 
 package xstream
 
@@ -28,7 +28,6 @@ func cleanupStream(t *testing.T, rdb *redis.Client, stream string) {
 	rdb.Del(context.Background(), stream)
 }
 
-// TestProducerPublish 验证 XADD 写入消息
 func TestProducerPublish(t *testing.T) {
 	rdb := newTestRedis(t)
 	stream := "test-producer-" + t.Name()
@@ -36,7 +35,7 @@ func TestProducerPublish(t *testing.T) {
 	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
 
 	p := NewProducer(rdb)
-	id, err := p.Publish(stream, map[string]string{
+	id, err := p.Publish(context.Background(), stream, map[string]string{
 		"event":    "test.event",
 		"event_id": "test-001",
 		"payload":  `{"hello":"world"}`,
@@ -58,109 +57,11 @@ func TestProducerPublish(t *testing.T) {
 	t.Logf("Publish OK, message ID: %s, stream length: %d", id, length)
 }
 
-// TestConsumerReceivePrePublished 模拟核心场景：
-// 先 publish，再启动 consumer，验证 ">" 能收到积压消息
-func TestConsumerReceivePrePublished(t *testing.T) {
-	rdb := newTestRedis(t)
-	stream := "test-pre-" + t.Name()
-	group := "pre-group"
-	consumerName := "pre-consumer-1"
-	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
-
-	// Step 1: 先发 3 条消息（模拟 Poller 在 Consumer 启动前发布）
-	p := NewProducer(rdb)
-	for i := range 3 {
-		_, err := p.Publish(stream, map[string]string{
-			"event":    "user.registered",
-			"event_id": "evt-" + string(rune('0'+i)),
-			"index":    string(rune('0' + i)),
-		})
-		if err != nil {
-			t.Fatalf("Publish %d failed: %v", i, err)
-		}
-	}
-	t.Log("Published 3 messages BEFORE consumer started")
-
-	// Step 2: 创建 consumer group（ID=0 表示从头开始）
-	err := rdb.XGroupCreateMkStream(context.Background(), stream, group, "0").Err()
-	if err != nil {
-		t.Fatalf("XGroupCreateMkStream failed: %v", err)
-	}
-	t.Log("Consumer group created with start ID 0")
-
-	// Step 3: 用 ">" 读取 — 应该能收到 pre-publish 的消息
-	// ">" 只返回 "未被任何 consumer 投递过" 的消息
-	// group 刚创建时，所有消息虽然在 PEL 中但 delivery_count=0，所以 ">" 可见
-	msgs, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
-		Group:    group,
-		Consumer: consumerName,
-		Streams:  []string{stream, ">"},
-		Count:    10,
-		Block:    1 * time.Second,
-	}).Result()
-	if err != nil {
-		t.Fatalf("XReadGroup '>' failed: %v", err)
-	}
-
-	total := 0
-	for _, s := range msgs {
-		total += len(s.Messages)
-		t.Log("Received messages:")
-		for _, m := range s.Messages {
-			t.Logf("  ID=%s values=%v", m.ID, m.Values)
-		}
-	}
-	if total != 3 {
-		t.Fatalf("expected 3 messages with '>', got %d", total)
-	}
-	t.Logf("XREADGROUP '>' returned all %d pre-published messages", total)
-
-	// Step 4: ACK 所有消息
-	for _, s := range msgs {
-		for _, m := range s.Messages {
-			err := rdb.XAck(context.Background(), stream, group, m.ID).Err()
-			if err != nil {
-				t.Fatalf("XAck %s failed: %v", m.ID, err)
-			}
-		}
-	}
-	t.Log("All messages ACKed")
-
-	// Step 5: 确认 pending 为空
-	pending, err := rdb.XPending(context.Background(), stream, group).Result()
-	if err != nil {
-		t.Fatalf("XPending failed: %v", err)
-	}
-	if pending.Count != 0 {
-		t.Fatalf("expected 0 pending after ACK, got %d", pending.Count)
-	}
-	t.Logf("Pending count: %d (all ACKed)", pending.Count)
-
-	// Step 6: 再读一次，应该阻塞到超时返回 redis.Nil
-	start := time.Now()
-	_, err = rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
-		Group:    group,
-		Consumer: consumerName,
-		Streams:  []string{stream, ">"},
-		Count:    10,
-		Block:    1 * time.Second,
-	}).Result()
-	elapsed := time.Since(start)
-	if err != redis.Nil {
-		t.Fatalf("expected redis.Nil after ACK, got: %v (elapsed: %v)", err, elapsed)
-	}
-	t.Logf("Second read blocked for %v then returned redis.Nil (correct)", elapsed)
-}
-
-// TestConsumerStartReceiveMessages 验证 Consumer.Start() 启动后能收到消息
 func TestConsumerStartReceiveMessages(t *testing.T) {
 	rdb := newTestRedis(t)
 	stream := "test-start-" + t.Name()
 	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() {
-		rdb.Del(context.Background(), stream)
-	})
+	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
 
 	var mu sync.Mutex
 	var received []map[string]string
@@ -178,8 +79,12 @@ func TestConsumerStartReceiveMessages(t *testing.T) {
 		Stream: stream,
 		Name:   "start-consumer-1",
 	}, handler)
-	consumer.Start()
-	defer consumer.Stop()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	consumer.Start(ctx, &wg)
+	defer func() { cancel(); wg.Wait() }()
 
 	// 等 consumer goroutine 启动并进入 XReadGroup 阻塞
 	time.Sleep(500 * time.Millisecond)
@@ -187,7 +92,7 @@ func TestConsumerStartReceiveMessages(t *testing.T) {
 	// 发消息
 	p := NewProducer(rdb)
 	for i := range 5 {
-		_, err := p.Publish(stream, map[string]string{
+		_, err := p.Publish(context.Background(), stream, map[string]string{
 			"event_id": "start-evt-" + string(rune('0'+i)),
 			"payload":  "hello",
 		})
@@ -218,8 +123,104 @@ func TestConsumerStartReceiveMessages(t *testing.T) {
 	t.Logf("Consumer processed all %d messages", n)
 }
 
-// TestConsumerReceiveAfterRestart 模拟 consumer 重启场景：
-// 发消息 → ACK → 再发新消息 → 验证只收到新消息
+func TestConsumerClaimPending(t *testing.T) {
+	rdb := newTestRedis(t)
+	stream := "test-claim-" + t.Name()
+	group := "claim-group"
+	cleanupStream(t, rdb, stream)
+	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
+
+	// Step 1: 创建 consumer group 并发送消息
+	p := NewProducer(rdb)
+	for i := range 3 {
+		_, err := p.Publish(context.Background(), stream, map[string]string{
+			"event_id": "claim-evt-" + string(rune('0'+i)),
+			"payload":  "data",
+		})
+		if err != nil {
+			t.Fatalf("Publish %d failed: %v", i, err)
+		}
+	}
+
+	err := rdb.XGroupCreateMkStream(context.Background(), stream, group, "0").Err()
+	if err != nil {
+		t.Fatalf("XGroupCreateMkStream failed: %v", err)
+	}
+
+	// Step 2: 用 "0" 读消息（读 pending），模拟旧 consumer 读了但没 ACK
+	msgs, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group:    group,
+		Consumer: "old-consumer",
+		Streams:  []string{stream, "0"},
+		Count:    10,
+		Block:    1 * time.Second,
+	}).Result()
+	if err != nil {
+		t.Fatalf("XReadGroup '0' failed: %v", err)
+	}
+	totalOld := 0
+	for _, s := range msgs {
+		totalOld += len(s.Messages)
+	}
+	if totalOld != 3 {
+		t.Fatalf("expected 3 messages, got %d", totalOld)
+	}
+	t.Log("Old consumer read 3 messages but DID NOT ack (simulating crash)")
+
+	// 验证 pending list 有 3 条
+	pending, err := rdb.XPending(context.Background(), stream, group).Result()
+	if err != nil {
+		t.Fatalf("XPending failed: %v", err)
+	}
+	if pending.Count != 3 {
+		t.Fatalf("expected 3 pending, got %d", pending.Count)
+	}
+
+	// Step 3: 新 consumer 启动，应该通过 XAUTOCLAIM 认领 pending 消息
+	var mu sync.Mutex
+	var received []map[string]string
+
+	handler := func(values map[string]string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		received = append(received, values)
+		return nil
+	}
+
+	consumer := NewConsumer(rdb, ConsumerConfig{
+		Group:  group,
+		Stream: stream,
+		Name:   "new-consumer",
+	}, handler)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	consumer.Start(ctx, &wg)
+	defer func() { cancel(); wg.Wait() }()
+
+	// 等待 XAUTOCLAIM 处理
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(received)
+		mu.Unlock()
+		if n >= 3 {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	mu.Lock()
+	n := len(received)
+	mu.Unlock()
+
+	if n != 3 {
+		t.Fatalf("expected 3 pending messages claimed, got %d", n)
+	}
+	t.Logf("New consumer claimed all %d pending messages via XAUTOCLAIM", n)
+}
+
 func TestConsumerReceiveAfterRestart(t *testing.T) {
 	rdb := newTestRedis(t)
 	stream := "test-restart-" + t.Name()
@@ -227,9 +228,8 @@ func TestConsumerReceiveAfterRestart(t *testing.T) {
 	cleanupStream(t, rdb, stream)
 	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
 
-	// 第一次消费
 	p := NewProducer(rdb)
-	_, err := p.Publish(stream, map[string]string{"event_id": "first"})
+	_, err := p.Publish(context.Background(), stream, map[string]string{"event_id": "first"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestConsumerReceiveAfterRestart(t *testing.T) {
 
 	msgs, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
 		Group: group, Consumer: "c1",
-		Streams: []string{stream, ">"}, Count: 10, Block: 1 * time.Second,
+		Streams: []string{stream, "0"}, Count: 10, Block: 1 * time.Second,
 	}).Result()
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +254,7 @@ func TestConsumerReceiveAfterRestart(t *testing.T) {
 	t.Log("First message consumed and ACKed")
 
 	// 第二次消费（模拟重启后）
-	_, err = p.Publish(stream, map[string]string{"event_id": "second"})
+	_, err = p.Publish(context.Background(), stream, map[string]string{"event_id": "second"})
 	if err != nil {
 		t.Fatal(err)
 	}
