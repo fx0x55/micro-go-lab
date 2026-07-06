@@ -54,14 +54,12 @@ services:
     labels:
       logging: "promtail"
     depends_on:
-      mysql:
-        condition: service_healthy
       etcd:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DATABASE_HOST: mysql
+      ETCD_HOSTS: etcd:2379
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis

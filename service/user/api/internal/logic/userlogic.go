@@ -2,30 +2,23 @@ package logic
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/fx0x55/micro-go-lab/common/ecode"
-	"github.com/fx0x55/micro-go-lab/common/model"
-	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/svc"
 	"github.com/fx0x55/micro-go-lab/service/user/api/internal/types"
-	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// 保留向后兼容的别名（供 handler 使用 logic.ErrXxx）
+// 保留向后兼容的别名（供 handler 使用 logic.ErrXxx）。
 var (
 	ErrUserExists         = ecode.ErrUserExists
 	ErrInvalidCredentials = ecode.ErrInvalidCredentials
-	ErrUserNotFound       = ecode.ErrUserNotFound
 )
 
 type RegisterLogic struct {
@@ -42,55 +35,21 @@ func NewRegisterLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Register
 	}
 }
 
-func (l *RegisterLogic) Register(req *types.RegisterRequest) (*model.User, error) {
-	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+// Register 调 user-rpc.CreateUser 创建用户。网关不碰密码哈希、不连库。
+func (l *RegisterLogic) Register(req *types.RegisterRequest) (*types.UserResponse, error) {
+	result, err := l.svcCtx.UserCli.CreateUser(l.ctx, req.Username, req.Password, req.Email)
 	if err != nil {
+		// gRPC AlreadyExists → 业务冲突。
+		if st, ok := status.FromError(err); ok && st.Code() == codes.AlreadyExists {
+			return nil, ErrUserExists
+		}
 		return nil, err
 	}
-
-	user := &model.User{
-		Username: req.Username,
-		Password: string(hashed),
-		Email:    req.Email,
-	}
-
-	err = l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
-		if err := l.svcCtx.UserRepo.Create(tx, user); err != nil {
-			mysqlErr := &mysql.MySQLError{}
-			if errors.As(err, &mysqlErr) {
-				return ErrUserExists
-			}
-			return err
-		}
-
-		payload, err := json.Marshal(xevent.Envelope{
-			Event:      xevent.UserRegistered,
-			Version:    1,
-			OccurredAt: time.Now(),
-			Data: xevent.UserRegisteredData{
-				UserID:   user.ID,
-				Username: user.Username,
-			},
-		})
-		if err != nil {
-			return err
-		}
-		outboxEvent := &xevent.OutboxEvent{
-			EventID:   uuid.New().String(),
-			Topic:     xevent.TopicUserEvents,
-			EventKey:  strconv.FormatUint(uint64(user.ID), 10),
-			EventType: string(xevent.UserRegistered),
-			Version:   1,
-			Payload:   string(payload),
-			Status:    xevent.OutboxStatusPending,
-		}
-		return l.svcCtx.OutboxRepo.Insert(tx, outboxEvent)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
+	return &types.UserResponse{
+		ID:       result.ID,
+		Username: result.Username,
+		Email:    result.Email,
+	}, nil
 }
 
 type LoginLogic struct {
@@ -107,31 +66,29 @@ func NewLoginLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LoginLogic 
 	}
 }
 
-func (l *LoginLogic) Login(req *types.LoginRequest) (map[string]any, *model.User, error) {
-	user, err := l.svcCtx.UserRepo.FindByUsername(l.ctx, req.Username)
+// Login 调 user-rpc.Authenticate 校验身份，校验通过后由网关签发 JWT。
+// 密码比对在 user-rpc 内部完成，哈希不出域。
+func (l *LoginLogic) Login(req *types.LoginRequest) (*types.LoginResponse, error) {
+	auth, err := l.svcCtx.UserCli.Authenticate(l.ctx, req.Username, req.Password)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, ErrInvalidCredentials
-		}
-		return nil, nil, err
+		return nil, err
+	}
+	if !auth.Exists {
+		// 不区分「用户不存在」与「密码错误」，防枚举。
+		return nil, ErrInvalidCredentials
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return nil, nil, ErrInvalidCredentials
-	}
-
-	token, err := generateToken(user, l.svcCtx.Config.JWT)
+	token, err := generateToken(auth.ID, auth.Username, l.svcCtx.Config.JWT)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	return map[string]any{"token": token}, user, nil
+	return &types.LoginResponse{Token: token}, nil
 }
 
-func generateToken(user *model.User, jwtCfg config.JWTConfig) (string, error) {
+func generateToken(userID uint64, username string, jwtCfg config.JWTConfig) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id":  user.ID,
-		"username": user.Username,
+		"user_id":  userID,
+		"username": username,
 		"exp":      time.Now().Add(jwtCfg.Expiration).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -152,13 +109,18 @@ func NewProfileLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ProfileLo
 	}
 }
 
-func (l *ProfileLogic) GetProfile(userID uint) (*model.User, error) {
-	user, err := l.svcCtx.UserRepo.FindByID(l.ctx, userID)
+// GetProfile 调 user-rpc.GetUser 查询资料。
+func (l *ProfileLogic) GetProfile(userID uint) (*types.UserResponse, error) {
+	resp, err := l.svcCtx.UserCli.GetUser(l.ctx, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
+		if errors.Is(err, ecode.ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
 		}
 		return nil, err
 	}
-	return user, nil
+	return &types.UserResponse{
+		ID:       resp.Id,
+		Username: resp.Username,
+		Email:    resp.Email,
+	}, nil
 }

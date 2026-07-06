@@ -5,36 +5,45 @@
 ## 架构概览
 
 ```
-┌─────────────┐       gRPC        ┌─────────────┐
-│  order-api  │ ──────────────▶   │  user-rpc   │
-│  HTTP :8081 │    (via etcd)     │  gRPC :9090 │
-└──────┬──────┘                   └──────┬──────┘
-       │                                  │
-       │           ┌─────────────┐        │
-       └──────────▶│  PostgreSQL │◀───────┘
-                   │  (GORM)     │
-                   └─────────────┘
-
-┌─────────────┐
-│  user-api   │  HTTP :8080（独立服务，不依赖 user-rpc）
-└─────────────┘
+                  ┌─────────────┐         ┌─────────────┐
+                  │  user-api   │         │  order-api  │
+                  │  HTTP :8080 │         │  HTTP :8081 │
+                  │  纯网关     │         │ 订单域所有者│
+                  └──────┬──────┘         └──────┬──────┘
+                         │ gRPC (etcd)           │ gRPC (etcd)
+                         │                       │
+                         ▼                       ▼
+                  ┌──────────────────────────────────┐
+                  │  user-rpc  gRPC :9090            │
+                  │  用户域唯一所有者                 │
+                  │  CreateUser / Authenticate       │
+                  │  ValidateUser / GetUser          │
+                  └──────┬───────────────────────────┘
+                         │
+                ┌────────┴────────┐
+                ▼                 ▼
+          ┌──────────┐       ┌──────────┐
+          │  MySQL   │       │  Redis   │
+          │ users_db │       │ Stream + │
+          │ (GORM)   │       │  cache   │
+          └──────────┘       └──────────┘
 ```
 
 **三个服务：**
 
 | 服务 | 协议 | 端口 | 说明 |
 |------|------|------|------|
-| `user-api` | HTTP REST | :8080 | 注册、登录、用户资料、Todo CRUD |
-| `user-rpc` | gRPC | :9090 | `ValidateUser` / `GetUser`，注册到 etcd 作为服务发现 |
-| `order-api` | HTTP REST | :8081 | 订单 CRUD，调用 user-rpc 校验用户 |
+| `user-api` | HTTP REST | :8080 | 纯网关：注册/登录/资料，全部转发 user-rpc，不连库 |
+| `user-rpc` | gRPC | :9090 | 用户域唯一所有者：`CreateUser` / `Authenticate` / `ValidateUser` / `GetUser`，生产 user-events |
+| `order-api` | HTTP REST | :8081 | 订单域所有者：订单 CRUD，调用 user-rpc 校验用户，生产 order-events |
 
 **基础设施：**
 
 | 组件 | 用途 |
 |------|------|
-| PostgreSQL | 双库：`users_db`（用户/Todo）、`orders_db`（订单） |
-| etcd | 服务注册与发现（user-rpc → order-api） |
-| Redis | 缓存 / 消息队列（Redis Streams） |
+| MySQL | 双库：`users_db`（用户）、`orders_db`（订单） |
+| etcd | 服务注册与发现（user-rpc → user-api / order-api） |
+| Redis | 缓存 / 消息队列（Redis Streams 事务性 Outbox） |
 
 ## 快速开始
 
@@ -55,7 +64,7 @@ make docker-full        # + Prometheus / Grafana / Jaeger / Loki
 ### 方式二：本地开发（推荐日常开发）
 
 ```bash
-make infra              # 仅启动 etcd + postgres + redis
+make infra              # 仅启动 etcd + mysql + redis
 make dev-user-api       # 本地 Go 运行 user-api（:8080）
 make dev-user-rpc       # 本地 Go 运行 user-rpc（:9090）
 make dev-order-api      # 本地 Go 运行 order-api（:8081）
@@ -85,7 +94,6 @@ make infra-down         # 停止开发环境基础设施
 | POST | `/api/user/register` | 注册 | 无 |
 | POST | `/api/user/login` | 登录，返回 JWT | 无 |
 | GET | `/api/user/profile` | 获取当前用户信息 | JWT |
-| GET/POST/PUT/DELETE | `/api/user/todos` | Todo CRUD | JWT |
 
 ### order-api（:8081）
 
@@ -99,8 +107,12 @@ make infra-down         # 停止开发环境基础设施
 
 gRPC 方法（proto 定义在 `api/user/v1/user.proto`）：
 
-- `ValidateUser` — 校验用户是否存在
+- `CreateUser` — 创建用户（注册），明文密码入参，bcrypt 哈希不出域
+- `Authenticate` — 校验用户名+密码，返回身份（防枚举）
+- `ValidateUser` — 校验用户是否存在（带 cache-aside 缓存）
 - `GetUser` — 获取用户信息
+
+**服务边界**：user-api 和 order-api 均不直连 `users_db`，所有用户数据访问必须经过 user-rpc。
 
 ## 项目结构
 
@@ -111,15 +123,15 @@ micro-go-lab/
 │   ├── config/               # 共享配置类型
 │   ├── client/               # gRPC 客户端（含重试）
 │   ├── middleware/            # HTTP 中间件（JWT、日志、健康检查）
-│   ├── model/                # 共享 GORM 模型
 │   ├── validator/            # 请求校验
 │   ├── xdb/                  # GORM 连接 + goose 迁移
 │   ├── xmetrics/             # Prometheus 自定义指标
 │   └── xstream/              # Panic 恢复工具
 ├── service/
-│   ├── user/api/             # user-api 服务
-│   └── user/rpc/             # user-rpc 服务
-│       └── pb/               # 生成的 protobuf 代码
+│   ├── user/api/             # user-api 服务（纯网关，不连库）
+│   ├── user/rpc/             # user-rpc 服务（用户域所有者，生产 user-events）
+│   │   └── pb/               # 生成的 protobuf 代码
+│   └── order/api/            # order-api 服务（订单域所有者，生产 order-events）
 ├── deploy/                   # 部署配置
 │   ├── prometheus.yml        # Prometheus 配置
 │   ├── prometheus/rules.yml  # 告警规则
@@ -211,8 +223,8 @@ make debug-order-api        # 端口 40003
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `DATABASE_HOST` | localhost | PostgreSQL 地址 |
-| `DATABASE_PORT` | 5432 | PostgreSQL 端口 |
+| `DATABASE_HOST` | localhost | MySQL 地址（user-rpc / order-api） |
+| `DATABASE_PORT` | 3306 | MySQL 端口（user-rpc / order-api） |
 | `DATABASE_SSLMODE` | disable | SSL 模式 |
 | `DATABASE_CONN_MAX_LIFETIME` | 5m | 连接最大存活时间 |
 | `DATABASE_CONN_MAX_IDLE_TIME` | 3m | 空闲连接最大存活时间 |

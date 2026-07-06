@@ -1,13 +1,16 @@
 package model
 
+import "gorm.io/gorm"
+
 const (
 	StatusPending   = "pending"
 	StatusPaid      = "paid"
 	StatusCancelled = "cancelled"
 )
 
+// Order 是 order-api 订单域的私有数据模型。
 type Order struct {
-	BaseModel
+	gorm.Model
 	UserID      uint   `json:"user_id"      gorm:"index;not null"`
 	ProductName string `json:"product_name" gorm:"size:256;not null"`
 	Amount      int64  `json:"amount"       gorm:"not null"` // 金额，单位：分

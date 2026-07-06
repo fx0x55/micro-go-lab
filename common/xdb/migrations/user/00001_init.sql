@@ -13,18 +13,6 @@ CREATE TABLE `users` (
     INDEX `idx_users_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `todos` (
-    `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    `user_id`    BIGINT UNSIGNED NOT NULL,
-    `title`      VARCHAR(256) NOT NULL,
-    `completed`  TINYINT(1) NOT NULL DEFAULT 0,
-    `deleted_at` DATETIME(3) DEFAULT NULL,
-    `created_at` DATETIME(3) NOT NULL DEFAULT NOW(3),
-    `updated_at` DATETIME(3) NOT NULL DEFAULT NOW(3),
-    INDEX `idx_todos_user_id` (`user_id`),
-    INDEX `idx_todos_deleted_at` (`deleted_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE `outbox_events` (
     `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `event_id`    CHAR(36) NOT NULL,
@@ -50,5 +38,4 @@ CREATE TABLE `processed_events` (
 -- +goose Down
 DROP TABLE IF EXISTS `processed_events`;
 DROP TABLE IF EXISTS `outbox_events`;
-DROP TABLE IF EXISTS `todos`;
 DROP TABLE IF EXISTS `users`;

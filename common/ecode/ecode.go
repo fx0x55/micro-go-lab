@@ -30,11 +30,6 @@ var (
 	ErrUserNotFound       = New(200003, "user not found")
 )
 
-// 待办模块 3xxxxx
-var (
-	ErrTodoNotFound = New(300001, "todo not found")
-)
-
 // 订单模块 4xxxxx
 var (
 	ErrOrderNotFound           = New(400001, "order not found")

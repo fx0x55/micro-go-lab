@@ -27,12 +27,16 @@ func main() {
 	cfg.MustSetUp()
 
 	svcCtx := svc.NewServiceContext(context.Background(), &cfg)
+	svcCtx.Start()
 
 	proc.AddShutdownListener(func() {
+		svcCtx.Stop()
 		if sqlDB, err := svcCtx.DB.DB(); err == nil {
 			_ = sqlDB.Close()
 		}
-		_ = svcCtx.Redis.Close()
+		if svcCtx.Redis != nil {
+			_ = svcCtx.Redis.Close()
+		}
 	})
 
 	s := zrpc.MustNewServer(cfg.RpcServerConf, func(grpcServer *grpc.Server) {

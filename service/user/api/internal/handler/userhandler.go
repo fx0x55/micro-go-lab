@@ -43,7 +43,7 @@ func LoginHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewLoginLogic(r.Context(), svcCtx)
-		resp, user, err := l.Login(&req)
+		resp, err := l.Login(&req)
 		if err != nil {
 			if errors.Is(err, logic.ErrInvalidCredentials) {
 				middleware.Unauthorized(w, err.Error())
@@ -52,8 +52,6 @@ func LoginHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			middleware.InternalError(w, "login failed")
 			return
 		}
-
-		_ = user
 		middleware.OkJson(w, resp)
 	}
 }

@@ -34,3 +34,15 @@ func (s *UserServiceServer) GetUser(ctx context.Context, in *pb.GetUserRequest) 
 	l := logic.NewGetUserLogic(ctx, s.svcCtx)
 	return l.GetUser(in)
 }
+
+// CreateUser 创建用户
+func (s *UserServiceServer) CreateUser(ctx context.Context, in *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
+	l := logic.NewCreateUserLogic(ctx, s.svcCtx)
+	return l.CreateUser(in)
+}
+
+// Authenticate 校验用户名+密码
+func (s *UserServiceServer) Authenticate(ctx context.Context, in *pb.AuthenticateRequest) (*pb.AuthenticateResponse, error) {
+	l := logic.NewAuthenticateLogic(ctx, s.svcCtx)
+	return l.Authenticate(in)
+}

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/fx0x55/micro-go-lab/common/ecode"
-	"github.com/fx0x55/micro-go-lab/common/model"
 	"github.com/fx0x55/micro-go-lab/common/page"
 	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
+	"github.com/fx0x55/micro-go-lab/service/order/api/internal/model"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/svc"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/types"
 	"github.com/google/uuid"

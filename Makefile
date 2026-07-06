@@ -27,9 +27,8 @@ proto:
 	  --go_opt=module=github.com/fx0x55/micro-go-lab \
 	  --go-grpc_opt=module=github.com/fx0x55/micro-go-lab \
 	  api/user/v1/user.proto
-	mv api/user/v1/*.go service/user/rpc/pb/
-	@sed -i '' 's/^package userv1$$/package pb/' service/user/rpc/pb/user.pb.go service/user/rpc/pb/user_grpc.pb.go
-	@sed -i '' 's|"github.com/fx0x55/micro-go-lab/gen/user/v1"|"github.com/fx0x55/micro-go-lab/service/user/rpc/pb"|g' service/user/rpc/pb/user_grpc.pb.go
+	# go_package 指向 service/user/rpc/pb;pb，配合 --go_opt=module 直接生成到目标目录，
+	# package 名为 pb，无需 mv/sed。
 
 docker-up:
 	docker compose up -d --build

@@ -2,18 +2,18 @@ package config
 
 import (
 	"os"
-	"strconv"
 
 	"github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/zeromicro/go-zero/rest"
 )
 
+// user-api 是纯 HTTP 网关：不持有数据库，所有用户数据通过 user-rpc 访问。
 type Config struct {
 	rest.RestConf
-	Database config.DatabaseConfig
-	JWT      config.JWTConfig
-	CORS     config.CORSConfig
-	Redis    config.RedisConfig
+	UserSvc config.UserSvcConfig // user-rpc 服务发现
+	JWT     config.JWTConfig
+	CORS    config.CORSConfig
+	Redis   config.RedisConfig // 限流后端
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -23,17 +23,14 @@ func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
 		c.Telemetry.Endpoint = s
 	}
-	if s := os.Getenv("DATABASE_HOST"); s != "" {
-		c.Database.Host = s
+	if hosts := config.EnvList("ETCD_HOSTS"); len(hosts) > 0 {
+		c.UserSvc.Etcd.Hosts = hosts
 	}
-	if s := os.Getenv("DATABASE_PORT"); s != "" {
-		if port, err := strconv.Atoi(s); err == nil {
-			c.Database.Port = port
-		}
+	if k := os.Getenv("ETCD_KEY"); k != "" {
+		c.UserSvc.Etcd.Key = k
 	}
 	if s := os.Getenv("REDIS_HOST"); s != "" {
 		c.Redis.Host = s
 	}
-	c.Database.ApplyEnvOverrides()
 	c.CORS.ApplyEnvOverrides()
 }

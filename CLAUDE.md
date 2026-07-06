@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run individual services (requires PostgreSQL + etcd running locally)
+# Run individual services (requires MySQL + etcd + redis running locally)
 make run-user-api    # HTTP :8080
 make run-user-rpc    # gRPC :9090
 make run-order-api   # HTTP :8081
@@ -20,14 +20,14 @@ go test ./service/user/api/internal/logic/... -v
 # Single test
 go test ./service/user/api/internal/logic/... -v -run TestName
 
-# Full stack via Docker (etcd, postgres, user-api, user-rpc, order-api)
+# Full stack via Docker (etcd, mysql, redis, user-api, user-rpc, order-api)
 make docker-up
 # Full stack + monitoring (prometheus, grafana, jaeger, loki, promtail)
 make docker-full
 make docker-down
 
 # Development mode: infra Docker + native Go (fastest iteration)
-make infra                    # Start etcd/postgres/redis only
+make infra                    # Start etcd/mysql/redis only
 make dev-user-api             # Infra + local go run
 make dev-user-rpc             # Infra + local go run
 make dev-order-api            # Infra + local go run
@@ -77,15 +77,16 @@ service/{name}/{api|rpc}/
 - `common/xdb` — GORM connection (`New`) + goose SQL migrations (`Migrate`, files embedded under `migrations/{user,order}/`)
 - `common/middleware` — JSON response helpers (`OkJson`/`CreatedJson`/`BadRequest`/...), `GetUserID` (JWT context), `HealthHandler` (DB ping → 503 on failure)
 - `common/client` — gRPC client wrapper (order-api → user-rpc) + exponential-backoff retry interceptor
-- `common/model` — shared GORM model structs (User, Todo, Order)
+
 - `common/validator` — `go-playground/validator` adapted to go-zero `httpx.SetValidator`
 
 ### Service interactions
 
-- **user-api** serves REST (register, login, profile, todos CRUD) on HTTP :8080
-- **user-rpc** serves gRPC (`ValidateUser`, `GetUser`) on :9090, registered with etcd as `user-svc.rpc`
-- **order-api** serves REST (orders CRUD) on HTTP :8081, calls user-rpc via gRPC to validate users before creating orders
-- Service discovery: user-rpc registers on etcd; order-api discovers it via `discov.EtcdConf`
+- **user-api** is a pure HTTP gateway (register, login, profile) on :8080; it does NOT connect to any database — all user data access goes through user-rpc via gRPC
+- **user-rpc** is the single owner of the user domain: gRPC (`CreateUser`, `Authenticate`, `ValidateUser`, `GetUser`) on :9090, registered with etcd as `user-svc.rpc`; it owns `users_db`, runs the user-events Outbox Poller, and exposes cache-aside via Redis
+- **order-api** owns the order domain: REST (orders CRUD) on HTTP :8081, calls user-rpc via gRPC to validate users before creating orders; it owns `orders_db` and runs the order-events Outbox Poller
+- Service discovery: user-rpc registers on etcd; user-api and order-api discover it via `discov.EtcdConf`
+- **Service boundary**: `users_db` is only accessed by user-rpc; `orders_db` only by order-api. No service reads another service's database directly — cross-service data access is always via gRPC.
 
 ### Key conventions
 
@@ -94,7 +95,7 @@ service/{name}/{api|rpc}/
 - **JWT auth**: go-zero's built-in `rest.WithJwt(secret)` middleware; user ID extracted from context key `"user_id"`
 - **Response format**: all endpoints use the shared `middleware.Response{Code, Message, Data}` wrapper — never write raw JSON
 - **Config**: YAML files in `etc/` per service; secrets and deploy-specific values injected via `ApplyEnvOverrides` reading `os.Getenv`
-- **Database**: PostgreSQL via GORM; schema managed by **goose** SQL migrations (embedded via `go:embed`, run automatically at startup in `common/xdb/migrate.go`)
+- **Database**: MySQL via GORM; schema managed by **goose** SQL migrations (embedded via `go:embed`, run automatically at startup in `common/xdb/migrate.go`)
 - **Proto source** in `api/user/v1/`; generated code in `service/user/rpc/pb/` (gitignored, regenerate with `make proto`)
 
 ### Background Goroutine Lifecycle
@@ -195,9 +196,11 @@ Note: go-zero's HTTP metrics are `{http_server_requests_duration_ms, http_server
 
 ### Databases
 
-Single PostgreSQL instance with two databases:
-- `users_db` — user-api/user-rpc models: User, Todo
-- `orders_db` — order-api models: Order (Amount is int64, in cents/fen)
+Single MySQL instance with two databases (each owned by exactly one service):
+- `users_db` — owned by **user-rpc** only: `users`, `outbox_events`, `processed_events`. user-api no longer connects here.
+- `orders_db` — owned by **order-api** only: `orders`, `outbox_events`, `processed_events`. Order (Amount is int64, in cents/fen).
+
+Each database is the private state of its owning service; cross-service access must go through gRPC.
 
 ### Environment Variables
 

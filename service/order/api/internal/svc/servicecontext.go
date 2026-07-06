@@ -3,7 +3,6 @@ package svc
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -30,7 +29,6 @@ type ServiceContext struct {
 	OutboxRepo  *xevent.OutboxRepository
 	Producer    *xstream.Producer
 	Poller      *xstream.Poller
-	Consumer    *xstream.Consumer
 	RateLimiter *middleware.RedisRateLimiter
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
@@ -55,26 +53,12 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	// 派生子 context：cancel 由 ServiceContext 管理，外部 ctx 取消时子 ctx 也会取消
 	ctx, cancel := context.WithCancel(ctx)
 
-	// 初始化 Redis Streams 事务性 Outbox 系统
+	// 事务性 Outbox 生产端：CreateOrder 在事务内写 outbox 事件，
+	// Poller 异步将其发布到 order-events Stream。
+	// 消费端暂不启用：当前无真实跨域消费者，等加 notification/analytics 服务时再接入。
 	outboxRepo := xevent.NewOutboxRepository(gormDB)
 	producer := xstream.NewProducer(redisClient)
 	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
-
-	idempotentRepo := xevent.NewIdempotentRepository(gormDB)
-
-	hostname := os.Getenv("HOSTNAME")
-	if hostname == "" {
-		hostname = "order-api-1"
-	}
-	consumer := xstream.NewConsumer(
-		redisClient,
-		xstream.ConsumerConfig{
-			Group:  "order-api",
-			Stream: xevent.TopicUserEvents,
-			Name:   "order-api-" + hostname,
-		},
-		HandleUserEvent(idempotentRepo),
-	)
 
 	rateLimiter := middleware.NewRedisRateLimiter(
 		gozeroRedis.New(c.Redis.Addr(), gozeroRedis.WithPass(c.Redis.Password)),
@@ -90,13 +74,11 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 		OutboxRepo:  outboxRepo,
 		Producer:    producer,
 		Poller:      poller,
-		Consumer:    consumer,
 		RateLimiter: rateLimiter,
 		cancel:      cancel,
 	}
 
 	poller.Start(ctx, &sc.wg)
-	consumer.Start(ctx, &sc.wg)
 
 	return sc
 }

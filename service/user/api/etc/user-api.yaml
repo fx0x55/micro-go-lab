@@ -135,23 +135,15 @@ Shutdown:
 # 以下字段由各服务的 Config struct 扩展，与 go-zero 无关
 # ============================================================
 
-# --- 数据库连接（common/config.DatabaseConfig） ---
-Database:
-  Host: localhost
-  Port: 3306
-  User: root
-  Password: root
-  DBName: users_db
-  # 连接池中允许存在的最大连接数，包括正在使用和空闲的。当所有连接都在使用且达到上限时，新的数据库操作会被阻塞，直到有连接被释放
-  MaxOpenConns: 25
-  # 连接池中保持的空闲连接的最大数量。保留空闲连接可以避免频繁创建和销毁连接的开销
-  MaxIdleConns: 10
-  # 单个连接最长存活时间，防止 DB 重启 / LB 轮换后使用陈旧连接
-  ConnMaxLifetime: 30m
-  # 连接最长空闲时间，回收池中暂不使用的连接
-  ConnMaxIdleTime: 5m
-  # 慢查询阈值，超过此时间的 SQL 将被记录；设为 0 不记录慢查询
-  SlowThreshold: 200ms
+# --- user-rpc 服务发现（common/config.UserSvcConfig） ---
+# user-api 是纯网关，不连库；用户数据通过 user-rpc 访问。
+UserSvc:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: user-svc.rpc
+  Timeout: 2000
+  BalanceName: p2c_ewma
 
 # --- Redis（common/config.RedisConfig） ---
 Redis:

@@ -11,20 +11,14 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type CreateTodoRequest struct {
-	Title string `json:"title" validate:"required,min=1,max=256"`
+// 网关响应类型：仅暴露契约字段，不含密码等内部实现细节。
+
+type UserResponse struct {
+	ID       uint64 `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email,omitempty"`
 }
 
-type UpdateTodoRequest struct {
-	Title     *string `json:"title"     validate:"omitempty,min=1,max=256"`
-	Completed *bool   `json:"completed"`
-}
-
-type TodoIDReq struct {
-	ID uint `path:"id"`
-}
-
-type ListTodoRequest struct {
-	Page     int `form:"page,default=1"       validate:"min=1"`
-	PageSize int `form:"page_size,default=20" validate:"min=1,max=100"`
+type LoginResponse struct {
+	Token string `json:"token"`
 }

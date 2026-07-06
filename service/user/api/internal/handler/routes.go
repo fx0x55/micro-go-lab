@@ -15,13 +15,9 @@ func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
 	server.AddRoute(rest.Route{
 		Method: http.MethodGet,
 		Path:   "/health",
-		Handler: middleware.HealthHandler("user-api", func() error {
-			sqlDB, err := svcCtx.DB.DB()
-			if err != nil {
-				return err
-			}
-			return sqlDB.Ping()
-		}),
+		// 网关无 DB 依赖：健康检查只反映进程存活。
+		// 下游 user-rpc 的可用性由 gRPC 客户端的熔断/重试保障，无需在此主动探测。
+		Handler: middleware.HealthHandler("user-api", func() error { return nil }),
 	})
 
 	// Public routes (no JWT)
@@ -33,10 +29,5 @@ func RegisterHandlers(server *rest.Server, svcCtx *svc.ServiceContext) {
 	// JWT-protected routes
 	server.AddRoutes([]rest.Route{
 		{Method: http.MethodGet, Path: "/api/v1/profile", Handler: ProfileHandler(svcCtx)},
-		{Method: http.MethodPost, Path: "/api/v1/todos", Handler: CreateTodoHandler(svcCtx)},
-		{Method: http.MethodGet, Path: "/api/v1/todos", Handler: ListTodoHandler(svcCtx)},
-		{Method: http.MethodGet, Path: "/api/v1/todos/:id", Handler: GetTodoHandler(svcCtx)},
-		{Method: http.MethodPut, Path: "/api/v1/todos/:id", Handler: UpdateTodoHandler(svcCtx)},
-		{Method: http.MethodDelete, Path: "/api/v1/todos/:id", Handler: DeleteTodoHandler(svcCtx)},
 	}, rest.WithJwt(svcCtx.Config.JWT.Secret))
 }

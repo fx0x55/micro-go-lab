@@ -18,6 +18,20 @@ type UserSummary struct {
 	Username string
 }
 
+// CreateUserResult 是 CreateUser 的返回，仅暴露契约字段，不含密码。
+type CreateUserResult struct {
+	ID       uint64
+	Username string
+	Email    string
+}
+
+// AuthenticateResult 是 Authenticate 的返回。Exists=false 表示用户名或密码错误。
+type AuthenticateResult struct {
+	Exists   bool
+	ID       uint64
+	Username string
+}
+
 type UserClient struct {
 	client userv1.UserServiceClient
 	conn   *grpc.ClientConn
@@ -82,6 +96,41 @@ func (c *UserClient) GetUser(ctx context.Context, userID uint) (*userv1.GetUserR
 		return nil, err
 	}
 	return resp, nil
+}
+
+// CreateUser 创建用户。gRPC AlreadyExists 映射为业务冲突，由调用方决定 HTTP 状态码。
+func (c *UserClient) CreateUser(ctx context.Context, username, password, email string) (*CreateUserResult, error) {
+	resp, err := c.client.CreateUser(ctx, &userv1.CreateUserRequest{
+		Username: username,
+		Password: password,
+		Email:    email,
+	})
+	if err != nil {
+		logx.Error("gRPC CreateUser failed", logx.Field("error", err))
+		return nil, err
+	}
+	return &CreateUserResult{
+		ID:       resp.Id,
+		Username: resp.Username,
+		Email:    resp.Email,
+	}, nil
+}
+
+// Authenticate 校验用户名+密码，返回身份。
+func (c *UserClient) Authenticate(ctx context.Context, username, password string) (*AuthenticateResult, error) {
+	resp, err := c.client.Authenticate(ctx, &userv1.AuthenticateRequest{
+		Username: username,
+		Password: password,
+	})
+	if err != nil {
+		logx.Error("gRPC Authenticate failed", logx.Field("error", err))
+		return nil, err
+	}
+	return &AuthenticateResult{
+		Exists:   resp.Exists,
+		ID:       resp.Id,
+		Username: resp.Username,
+	}, nil
 }
 
 func (c *UserClient) Close() error {

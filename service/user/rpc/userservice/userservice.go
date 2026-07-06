@@ -19,11 +19,20 @@ type (
 	ValidateUserRequest  = pb.ValidateUserRequest
 	ValidateUserResponse = pb.ValidateUserResponse
 
+	CreateUserRequest       = pb.CreateUserRequest
+	CreateUserResponse      = pb.CreateUserResponse
+	AuthenticateRequest     = pb.AuthenticateRequest
+	AuthenticateResponse    = pb.AuthenticateResponse
+
 	UserService interface {
 		// ValidateUser 验证用户是否存在
 		ValidateUser(ctx context.Context, in *ValidateUserRequest, opts ...grpc.CallOption) (*ValidateUserResponse, error)
 		// GetUser 获取用户信息
 		GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
+		// CreateUser 创建用户
+		CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error)
+		// Authenticate 校验用户名+密码
+		Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*AuthenticateResponse, error)
 	}
 
 	defaultUserService struct {
@@ -47,4 +56,16 @@ func (m *defaultUserService) ValidateUser(ctx context.Context, in *ValidateUserR
 func (m *defaultUserService) GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error) {
 	client := pb.NewUserServiceClient(m.cli.Conn())
 	return client.GetUser(ctx, in, opts...)
+}
+
+// CreateUser 创建用户
+func (m *defaultUserService) CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error) {
+	client := pb.NewUserServiceClient(m.cli.Conn())
+	return client.CreateUser(ctx, in, opts...)
+}
+
+// Authenticate 校验用户名+密码
+func (m *defaultUserService) Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*AuthenticateResponse, error) {
+	client := pb.NewUserServiceClient(m.cli.Conn())
+	return client.Authenticate(ctx, in, opts...)
 }
