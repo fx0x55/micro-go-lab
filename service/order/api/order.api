@@ -1,0 +1,45 @@
+syntax = "v1"
+
+info (
+	title:   "order-api"
+	desc:    "订单域：订单 CRUD，调用 user-rpc 校验用户，生产 order-events"
+	author:  "micro-go-lab"
+	version: "v1"
+)
+
+type (
+	CreateOrderRequest {
+		ProductName string `json:"product_name" validate:"required,min=1,max=256"`
+		Amount      int64  `json:"amount"       validate:"required,gt=0"`
+	}
+	UpdateOrderStatusRequest {
+		Status string `json:"status" validate:"required,oneof=paid cancelled"`
+	}
+	OrderIDReq {
+		ID uint `path:"id"`
+	}
+	ListOrderRequest {
+		Page     int `form:"page,default=1"       validate:"min=1"`
+		PageSize int `form:"page_size,default=20" validate:"min=1,max=100"`
+	}
+)
+
+@server (
+	prefix: /api/v1
+	group:  order
+	jwt:    Auth
+)
+service order-api {
+	@handler CreateOrderHandler
+	post /orders (CreateOrderRequest)
+
+	@handler ListOrderHandler
+	get /orders (ListOrderRequest)
+
+	@handler GetOrderHandler
+	get /orders/:id (OrderIDReq)
+
+	@handler UpdateOrderStatusHandler
+	put /orders/:id/status (UpdateOrderStatusRequest)
+}
+

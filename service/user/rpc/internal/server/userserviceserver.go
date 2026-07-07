@@ -35,13 +35,13 @@ func (s *UserServiceServer) GetUser(ctx context.Context, in *pb.GetUserRequest) 
 	return l.GetUser(in)
 }
 
-// CreateUser 创建用户
+// CreateUser 创建用户（注册），明文密码入参，哈希不出 user-rpc
 func (s *UserServiceServer) CreateUser(ctx context.Context, in *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
 	l := logic.NewCreateUserLogic(ctx, s.svcCtx)
 	return l.CreateUser(in)
 }
 
-// Authenticate 校验用户名+密码
+// Authenticate 校验用户名+密码，返回身份（不返回哈希）
 func (s *UserServiceServer) Authenticate(ctx context.Context, in *pb.AuthenticateRequest) (*pb.AuthenticateResponse, error) {
 	l := logic.NewAuthenticateLogic(ctx, s.svcCtx)
 	return l.Authenticate(in)

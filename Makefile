@@ -23,12 +23,21 @@ clean:
 	rm -rf bin/
 
 proto:
-	protoc --go_out=. --go-grpc_out=. \
+	goctl rpc protoc api/user/v1/user.proto \
+	  --proto_path=api/user/v1 \
+	  --go_out=. --go-grpc_out=. \
 	  --go_opt=module=github.com/fx0x55/micro-go-lab \
 	  --go-grpc_opt=module=github.com/fx0x55/micro-go-lab \
-	  api/user/v1/user.proto
-	# go_package 指向 service/user/rpc/pb;pb，配合 --go_opt=module 直接生成到目标目录，
-	# package 名为 pb，无需 mv/sed。
+	  --zrpc_out=service/user/rpc --style=goZero
+	# 统一走 goctl rpc protoc：生成 pb/ + userservice/ + internal/server/。
+	# logic/svc/config 因 goctl 的"存在即跳过"规则保留业务代码。
+	# goctl 1.10.1 推断 pb 别名为 pb_pb（proto 路径含 user/v1），sed 修正为 pb。
+	# goctl 按 package 名创建 user.v1.go / user.v1.yaml，删除（真实入口是 userrpc.go）。
+	sed -i '' 's/pb_pb\./pb./g' \
+	  service/user/rpc/userservice/userservice.go \
+	  service/user/rpc/internal/server/userserviceserver.go \
+	  service/user/rpc/internal/logic/*.go
+	rm -f service/user/rpc/user.v1.go service/user/rpc/etc/user.v1.yaml
 
 docker-up:
 	docker compose up -d --build
@@ -91,3 +100,13 @@ debug-user-rpc:
 
 debug-order-api:
 	docker compose --profile debug up -d --build order-api-debug
+
+# === API code generation (goctl api go) ===
+# 重新生成 types.go + routes.go（覆盖），handler/logic/svc/config 因"存在即跳过"保留。
+gen-user-api:
+	goctl api go -api service/user/api/user.api -dir service/user/api --style=goZero
+
+gen-order-api:
+	goctl api go -api service/order/api/order.api -dir service/order/api --style=goZero
+
+gen-api: gen-user-api gen-order-api

@@ -154,12 +154,11 @@ Redis:
   # # 连接密码
   # Password: ""
 
-# --- JWT 认证（common/config.JWTConfig） ---
-JWT:
+Auth:
   # 签名密钥，生产环境务必替换！pro/pre 模式使用默认值会拒绝启动
-  Secret: change-me-in-production
-  # Token 过期时间
-  Expiration: 24h
+  AccessSecret: change-me-in-production
+  # Token 过期时间（秒），86400 = 24h
+  AccessExpire: 86400
 
 # --- CORS 跨域（common/config.CORSConfig） ---
 CORS:

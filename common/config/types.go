@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/discov"
+	"github.com/zeromicro/go-zero/zrpc"
 )
 
 // RedisConfig 是 Redis 连接配置。
@@ -75,6 +76,28 @@ type UserSvcConfig struct {
 	Etcd      discov.EtcdConf
 	Endpoints []string `json:",optional"`
 	Timeout   int64    `json:",default=2000"`
+}
+
+// RpcClientConf 把 UserSvcConfig 转成 go-zero 的 zrpc.RpcClientConf。
+//
+// 关键：直接构造 RpcClientConf 字面量不会走 conf 解析，Middlewares 上的
+// `json:",default=true"` 标签不生效，会被当成零值 false，进而导致
+// Trace/Breaker/Timeout 等客户端拦截器被 buildUnaryInterceptors 跳过。
+// 显式把 Middlewares 各项置 true，与 RpcServerConf 经 conf.MustLoad 后的默认行为一致。
+func (c *UserSvcConfig) RpcClientConf() zrpc.RpcClientConf {
+	return zrpc.RpcClientConf{
+		Etcd:      c.Etcd,
+		Endpoints: c.Endpoints,
+		Timeout:   c.Timeout,
+		NonBlock:  true,
+		Middlewares: zrpc.ClientMiddlewaresConf{
+			Trace:      true,
+			Duration:   true,
+			Prometheus: true,
+			Breaker:    true,
+			Timeout:    true,
+		},
+	}
 }
 
 // CacheConfig 是 cache-aside 缓存的通用 TTL 配置。

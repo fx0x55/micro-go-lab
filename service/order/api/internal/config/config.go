@@ -4,22 +4,25 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/fx0x55/micro-go-lab/common/config"
+	commonconfig "github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/zeromicro/go-zero/rest"
 )
 
 type Config struct {
 	rest.RestConf
-	Database config.DatabaseConfig
-	JWT      config.JWTConfig
-	UserSvc  config.UserSvcConfig
-	Redis    config.RedisConfig
-	CORS     config.CORSConfig
+	Auth struct {
+		AccessSecret string
+		AccessExpire int64
+	}
+	Database commonconfig.DatabaseConfig
+	UserSvc  commonconfig.UserSvcConfig
+	Redis    commonconfig.RedisConfig
+	CORS     commonconfig.CORSConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
-		c.JWT.Secret = s
+		c.Auth.AccessSecret = s
 	}
 	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
 		c.Telemetry.Endpoint = s
@@ -33,7 +36,7 @@ func (c *Config) ApplyEnvOverrides() {
 		}
 	}
 	c.Database.ApplyEnvOverrides()
-	if hosts := config.EnvList("USERSVC_ETCD_HOSTS"); len(hosts) > 0 {
+	if hosts := commonconfig.EnvList("USERSVC_ETCD_HOSTS"); len(hosts) > 0 {
 		c.UserSvc.Etcd.Hosts = hosts
 	}
 	if k := os.Getenv("USERSVC_ETCD_KEY"); k != "" {

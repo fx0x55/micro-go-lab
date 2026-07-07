@@ -1,27 +1,26 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 )
 
-// ContextKey 用于 context.Value 的自定义 key 类型，避免与其它包的 string key 碰撞。
 type ContextKey string
 
-// CtxKeyUserID 是 user_id 在 context 中的 key。
-// GetUserID 优先读此 key；若未找到，回退读 go-zero JWT 中间件写入的 string key "user_id"。
 const CtxKeyUserID ContextKey = "user_id"
 
-// goZeroUserIDKey 是 go-zero JWT 中间件使用的 context key（内置 string 类型）。
 const goZeroUserIDKey = "user_id"
 
-// GetUserID 从请求上下文提取 JWT 中的 user_id。
-// 优先读 CtxKeyUserID（类型安全），回退读 go-zero JWT string key。
 func GetUserID(r *http.Request) uint {
-	v := r.Context().Value(CtxKeyUserID)
+	return GetUserIDFromContext(r.Context())
+}
+
+func GetUserIDFromContext(ctx context.Context) uint {
+	v := ctx.Value(CtxKeyUserID)
 	if v == nil {
-		v = r.Context().Value(goZeroUserIDKey)
+		v = ctx.Value(goZeroUserIDKey)
 	}
 	if v == nil {
 		return 0

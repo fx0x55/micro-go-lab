@@ -1,0 +1,51 @@
+syntax = "v1"
+
+info (
+	title:   "user-api"
+	desc:    "用户网关：注册/登录/资料，全部转发 user-rpc，不连库"
+	author:  "micro-go-lab"
+	version: "v1"
+)
+
+type (
+	RegisterRequest {
+		Username string `json:"username" validate:"required,min=3,max=64"`
+		Password string `json:"password" validate:"required,min=6,max=128"`
+		Email    string `json:"email"    validate:"required,email"`
+	}
+	LoginRequest {
+		Username string `json:"username" validate:"required"`
+		Password string `json:"password" validate:"required"`
+	}
+	UserResponse {
+		ID       uint64 `json:"id"`
+		Username string `json:"username"`
+		Email    string `json:"email,omitempty"`
+	}
+	LoginResponse {
+		Token string `json:"token"`
+	}
+)
+
+@server (
+	prefix: /api/v1
+	group:  user
+)
+service user-api {
+	@handler RegisterHandler
+	post /register (RegisterRequest) returns (UserResponse)
+
+	@handler LoginHandler
+	post /login (LoginRequest) returns (LoginResponse)
+}
+
+@server (
+	prefix: /api/v1
+	group:  user
+	jwt:    Auth
+)
+service user-api {
+	@handler ProfileHandler
+	get /profile returns (UserResponse)
+}
+

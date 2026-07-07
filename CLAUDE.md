@@ -43,8 +43,10 @@ make debug-order-api          # Single service with Delve (port 40003)
 # Go proxy (required in China network)
 GOPROXY=https://goproxy.cn go mod download
 
-# Regenerate protobuf (after editing api/user/v1/user.proto) — output lands in service/user/rpc/pb/
+# Regenerate rpc code (pb/ + userservice/ + internal/server/) — logic/svc/config 保留
 make proto
+# Regenerate api code (types.go + routes.go) — handler/logic/svc/config 保留
+make gen-api
 
 # Database migrations run automatically at service startup (embedded goose).
 # To add a migration: drop a new SQL file in common/xdb/migrations/{user,order}/

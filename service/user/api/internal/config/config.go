@@ -3,27 +3,29 @@ package config
 import (
 	"os"
 
-	"github.com/fx0x55/micro-go-lab/common/config"
+	commonconfig "github.com/fx0x55/micro-go-lab/common/config"
 	"github.com/zeromicro/go-zero/rest"
 )
 
-// user-api 是纯 HTTP 网关：不持有数据库，所有用户数据通过 user-rpc 访问。
 type Config struct {
 	rest.RestConf
-	UserSvc config.UserSvcConfig // user-rpc 服务发现
-	JWT     config.JWTConfig
-	CORS    config.CORSConfig
-	Redis   config.RedisConfig // 限流后端
+	Auth struct {
+		AccessSecret string
+		AccessExpire int64
+	}
+	UserSvc commonconfig.UserSvcConfig
+	CORS    commonconfig.CORSConfig
+	Redis   commonconfig.RedisConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
-		c.JWT.Secret = s
+		c.Auth.AccessSecret = s
 	}
 	if s := os.Getenv("OTLP_ENDPOINT"); s != "" {
 		c.Telemetry.Endpoint = s
 	}
-	if hosts := config.EnvList("ETCD_HOSTS"); len(hosts) > 0 {
+	if hosts := commonconfig.EnvList("ETCD_HOSTS"); len(hosts) > 0 {
 		c.UserSvc.Etcd.Hosts = hosts
 	}
 	if k := os.Getenv("ETCD_KEY"); k != "" {

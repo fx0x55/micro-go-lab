@@ -32,9 +32,11 @@ Redis:
   Port: 6379
   DB: 0
 
-JWT:
-  Secret: change-me-in-production
-  Expiration: 24h
+Auth:
+  # 签名密钥，生产环境务必替换！pro/pre 模式使用默认值会拒绝启动
+  AccessSecret: change-me-in-production
+  # Token 过期时间（秒），86400 = 24h
+  AccessExpire: 86400
 
 Prometheus:
   Host: 0.0.0.0

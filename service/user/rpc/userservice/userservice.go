@@ -14,24 +14,23 @@ import (
 )
 
 type (
+	AuthenticateRequest  = pb.AuthenticateRequest
+	AuthenticateResponse = pb.AuthenticateResponse
+	CreateUserRequest    = pb.CreateUserRequest
+	CreateUserResponse   = pb.CreateUserResponse
 	GetUserRequest       = pb.GetUserRequest
 	GetUserResponse      = pb.GetUserResponse
 	ValidateUserRequest  = pb.ValidateUserRequest
 	ValidateUserResponse = pb.ValidateUserResponse
-
-	CreateUserRequest       = pb.CreateUserRequest
-	CreateUserResponse      = pb.CreateUserResponse
-	AuthenticateRequest     = pb.AuthenticateRequest
-	AuthenticateResponse    = pb.AuthenticateResponse
 
 	UserService interface {
 		// ValidateUser 验证用户是否存在
 		ValidateUser(ctx context.Context, in *ValidateUserRequest, opts ...grpc.CallOption) (*ValidateUserResponse, error)
 		// GetUser 获取用户信息
 		GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
-		// CreateUser 创建用户
+		// CreateUser 创建用户（注册），明文密码入参，哈希不出 user-rpc
 		CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error)
-		// Authenticate 校验用户名+密码
+		// Authenticate 校验用户名+密码，返回身份（不返回哈希）
 		Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*AuthenticateResponse, error)
 	}
 
@@ -58,13 +57,13 @@ func (m *defaultUserService) GetUser(ctx context.Context, in *GetUserRequest, op
 	return client.GetUser(ctx, in, opts...)
 }
 
-// CreateUser 创建用户
+// CreateUser 创建用户（注册），明文密码入参，哈希不出 user-rpc
 func (m *defaultUserService) CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error) {
 	client := pb.NewUserServiceClient(m.cli.Conn())
 	return client.CreateUser(ctx, in, opts...)
 }
 
-// Authenticate 校验用户名+密码
+// Authenticate 校验用户名+密码，返回身份（不返回哈希）
 func (m *defaultUserService) Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*AuthenticateResponse, error) {
 	client := pb.NewUserServiceClient(m.cli.Conn())
 	return client.Authenticate(ctx, in, opts...)
