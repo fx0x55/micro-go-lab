@@ -85,8 +85,8 @@ service/{name}/{api|rpc}/
 ### Service interactions
 
 - **user-api** is a pure HTTP gateway (register, login, profile) on :8080; it does NOT connect to any database — all user data access goes through user-rpc via gRPC
-- **user-rpc** is the single owner of the user domain: gRPC (`CreateUser`, `Authenticate`, `ValidateUser`, `GetUser`) on :9090, registered with etcd as `user-svc.rpc`; it owns `users_db`, runs the user-events Outbox Poller, and exposes cache-aside via Redis
-- **order-api** owns the order domain: REST (orders CRUD) on HTTP :8081, calls user-rpc via gRPC to validate users before creating orders; it owns `orders_db` and runs the order-events Outbox Poller
+- **user-rpc** is the single owner of the user domain: gRPC (`CreateUser`, `Authenticate`, `ValidateUser`, `GetUser`) on :9090, registered with etcd as `user-svc.rpc`; it owns `users_db`, runs the user-events Outbox Poller (publishes to Kafka), and exposes cache-aside via Redis
+- **order-api** owns the order domain: REST (orders CRUD) on HTTP :8081, calls user-rpc via gRPC to validate users before creating orders; it owns `orders_db`, runs the order-events Outbox Poller (publishes to Kafka), and consumes `user-events` from Kafka to maintain a `known_users` CQRS materialized view
 - Service discovery: user-rpc registers on etcd; user-api and order-api discover it via `discov.EtcdConf`
 - **Service boundary**: `users_db` is only accessed by user-rpc; `orders_db` only by order-api. No service reads another service's database directly — cross-service data access is always via gRPC.
 
@@ -200,7 +200,7 @@ Note: go-zero's HTTP metrics are `{http_server_requests_duration_ms, http_server
 
 Single MySQL instance with two databases (each owned by exactly one service):
 - `users_db` — owned by **user-rpc** only: `users`, `outbox_events`, `processed_events`. user-api no longer connects here.
-- `orders_db` — owned by **order-api** only: `orders`, `outbox_events`, `processed_events`. Order (Amount is int64, in cents/fen).
+- `orders_db` — owned by **order-api** only: `orders`, `outbox_events`, `processed_events`, `known_users` (CQRS view from Kafka consumer). Order (Amount is int64, in cents/fen).
 
 Each database is the private state of its owning service; cross-service access must go through gRPC.
 

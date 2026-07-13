@@ -33,11 +33,11 @@ var (
 		Help: "Total outbox events published by topic and result.",
 	}, []string{"topic", labelResult})
 
-	// RedisStreamMessagesConsumed 统计 Redis Stream 消息消费情况，label: topic, group, result (success, error)
-	RedisStreamMessagesConsumed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "redis_stream_messages_consumed_total",
-		Help: "Total Redis Stream messages consumed by topic, group and result.",
-	}, []string{"topic", "group", labelResult})
+	// KafkaMessagesConsumed 统计 Kafka 消息消费情况，label: topic, group, partition, result (success, error)
+	KafkaMessagesConsumed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kafka_messages_consumed_total",
+		Help: "Total Kafka messages consumed by topic, group, partition and result.",
+	}, []string{"topic", "group", "partition", labelResult})
 )
 
 func init() {
@@ -46,6 +46,6 @@ func init() {
 		UsersRegistered,
 		RPCBreakerRejected,
 		OutboxEventsPublished,
-		RedisStreamMessagesConsumed,
+		KafkaMessagesConsumed,
 	)
 }

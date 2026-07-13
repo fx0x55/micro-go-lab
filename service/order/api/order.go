@@ -33,6 +33,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	svcCtx := svc.NewServiceContext(ctx, &cfg)
+	svcCtx.Start()
 
 	proc.AddShutdownListener(func() {
 		svcCtx.Stop()

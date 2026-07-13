@@ -83,10 +83,10 @@ dev-user-api: infra
 	go run ./service/user/api
 
 dev-user-rpc: infra
-	go run ./service/user/rpc
+	KAFKA_BOOTSTRAP_SERVERS=localhost:9094,localhost:9095,localhost:9096 go run ./service/user/rpc
 
 dev-order-api: infra
-	go run ./service/order/api
+	KAFKA_BOOTSTRAP_SERVERS=localhost:9094,localhost:9095,localhost:9096 go run ./service/order/api
 
 # === Container debug (Delve) ===
 debug:

@@ -41,7 +41,8 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 		panic(fmt.Sprintf("failed to migrate: %v", err))
 	}
 
-	// Redis：同时承担 cache 后端和 Streams 生产者。RedisCache.Host 为空时退化为无缓存。
+	// Redis：仅承担 cache 后端（限流 / idempotency gate 仍在 order-api）。
+	// MQ 职责已迁移至 Kafka。RedisCache.Host 为空时退化为无缓存。
 	var redisClient *redis.Client
 	if c.RedisCache.Host != "" {
 		var err error
@@ -55,15 +56,14 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// 事务性 Outbox 生产端：CreateUser 在事务内写 outbox 事件，
-	// Poller 异步将其发布到 Redis Stream。user-rpc 现在是用户域唯一所有者，
+	// Poller 异步将其发布到 Kafka topic。user-rpc 现在是用户域唯一所有者，
 	// 故 user-events 的发布链路收归于此。
 	outboxRepo := xevent.NewOutboxRepository(gormDB)
-	var producer *xstream.Producer
-	var poller *xstream.Poller
-	if redisClient != nil {
-		producer = xstream.NewProducer(redisClient)
-		poller = xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
+	producer, err := xstream.NewProducer(c.Kafka.BootstrapServers)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create kafka producer: %v", err))
 	}
+	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
 
 	return &ServiceContext{
 		Config:   *c,
@@ -91,5 +91,8 @@ func (sc *ServiceContext) Start() {
 func (sc *ServiceContext) Stop() {
 	sc.cancel()
 	sc.wg.Wait()
+	if sc.Producer != nil {
+		_ = sc.Producer.Close()
+	}
 	logx.Info("all background goroutines stopped")
 }

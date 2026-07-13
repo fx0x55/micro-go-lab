@@ -82,7 +82,7 @@ func (l *CreateUserLogic) CreateUser(in *pb.CreateUserRequest) (*pb.CreateUserRe
 		return nil, status.Errorf(codes.Internal, "create user failed: %v", err)
 	}
 
-	// 写 outbox 事件（同一事务），UserRegistered 由 Poller 异步发往 Redis Stream。
+	// 写 outbox 事件（同一事务），UserRegistered 由 Poller 异步发往 Kafka topic。
 	payload, _ := json.Marshal(xevent.Envelope{
 		Event:      xevent.UserRegistered,
 		Version:    1,

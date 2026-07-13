@@ -16,7 +16,7 @@ import (
 // pollerCaller 用于日志标识 panic 发生在 poller goroutine。
 const pollerCaller = "poller"
 
-// Poller Outbox 轮询器，定期从 DB 读取待发送事件并发布到 Redis Stream
+// Poller Outbox 轮询器，定期从 DB 读取待发送事件并发布到 Kafka topic
 type Poller struct {
 	outboxRepo *xevent.OutboxRepository
 	producer   *Producer
@@ -79,20 +79,23 @@ func (p *Poller) tick(ctx context.Context) {
 	for i := range events {
 		event := &events[i]
 
-		values := map[string]string{
-			"event":       event.EventType,
-			"event_id":    event.EventID,
-			"event_key":   event.EventKey,
-			"version":     strconv.Itoa(event.Version),
-			"occurred_at": event.CreatedAt.Format(time.RFC3339),
-			"payload":     event.Payload,
+		msg := &Message{
+			Topic: event.Topic,
+			Key:   event.EventKey,
+			Value: []byte(event.Payload),
+			Headers: map[string]string{
+				"event_id":    event.EventID,
+				"event_type":  event.EventType,
+				"version":     strconv.Itoa(event.Version),
+				"occurred_at": event.CreatedAt.Format(time.RFC3339),
+			},
 		}
 
-		_, err := p.producer.Publish(ctx, event.Topic, values)
+		err := p.producer.Publish(ctx, msg)
 		if err != nil {
 			logx.Error("outbox publish failed",
 				logx.Field("event_id", event.EventID),
-				logx.Field("stream", event.Topic),
+				logx.Field("topic", event.Topic),
 				logx.Field("error", err.Error()),
 			)
 			if err := p.outboxRepo.IncrementRetryCount(event.ID, err.Error()); err != nil {
@@ -113,7 +116,7 @@ func (p *Poller) tick(ctx context.Context) {
 
 		logx.Info("outbox event published",
 			logx.Field("event_id", event.EventID),
-			logx.Field("stream", event.Topic),
+			logx.Field("topic", event.Topic),
 			logx.Field("event_type", event.EventType),
 		)
 	}

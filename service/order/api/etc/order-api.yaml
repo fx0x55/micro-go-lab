@@ -51,3 +51,11 @@ Telemetry:
 CORS:
   AllowedOrigins:
     - "*"
+
+Kafka:
+  BootstrapServers:
+    - localhost:9094
+    - localhost:9095
+    - localhost:9096
+  GroupID: order-api
+  Topic: user-events

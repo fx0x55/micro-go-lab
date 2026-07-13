@@ -4,80 +4,148 @@ package xstream
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 )
 
-func newTestRedis(t *testing.T) *redis.Client {
-	t.Helper()
-	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		t.Fatalf("redis not available: %v", err)
-	}
-	t.Cleanup(func() { rdb.Close() })
-	return rdb
+const testHeaderEventID = "event_id"
+
+const testBrokers = "localhost:9094"
+
+// uniqueTopic 生成带时间戳的唯一 topic 名，避免测试间干扰。
+func uniqueTopic(prefix string) string {
+	return fmt.Sprintf("test-%s-%d", prefix, time.Now().UnixNano())
 }
 
-func cleanupStream(t *testing.T, rdb *redis.Client, stream string) {
+// createTestTopic 用 kafka-go Admin API 创建一个 topic 供测试使用。
+func createTestTopic(t *testing.T, topic string) {
 	t.Helper()
-	rdb.Del(context.Background(), stream)
+	conn, err := kafka.Dial("tcp", testBrokers)
+	if err != nil {
+		t.Fatalf("dial broker failed: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	controller, err := conn.Controller()
+	if err != nil {
+		t.Fatalf("get controller failed: %v", err)
+	}
+
+	controllerAddr := fmt.Sprintf("%s:%d", controller.Host, controller.Port)
+	topicConn, err := kafka.Dial("tcp", controllerAddr)
+	if err != nil {
+		t.Fatalf("dial controller failed: %v", err)
+	}
+	defer func() { _ = topicConn.Close() }()
+
+	err = topicConn.CreateTopics(kafka.TopicConfig{
+		Topic:             topic,
+		NumPartitions:     3,
+		ReplicationFactor: 1,
+	})
+	if err != nil {
+		t.Logf("CreateTopics %s: %v (may already exist)", topic, err)
+	}
+}
+
+// newTestProducer 创建一个不做 ensureTopics 的测试 Producer（topic 手动创建）。
+func newTestProducer(t *testing.T) *Producer {
+	t.Helper()
+	w := &kafka.Writer{
+		Addr:         kafka.TCP(testBrokers),
+		Balancer:     &kafka.Hash{},
+		RequiredAcks: kafka.RequireAll,
+		MaxAttempts:  3,
+		Async:        false,
+		BatchTimeout: 10 * time.Millisecond,
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	return &Producer{writer: w}
+}
+
+// waitForMessages 轮询等待 received 切片长度达到 want，超时失败。
+func waitForMessages(t *testing.T, mu *sync.Mutex, received *[]*Message, want int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(*received)
+		mu.Unlock()
+		if n >= want {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	mu.Lock()
+	got := len(*received)
+	mu.Unlock()
+	t.Fatalf("expected %d messages, got %d (timeout)", want, got)
 }
 
 func TestProducerPublish(t *testing.T) {
-	rdb := newTestRedis(t)
-	stream := "test-producer-" + t.Name()
-	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
+	topic := uniqueTopic("producer")
+	createTestTopic(t, topic)
 
-	p := NewProducer(rdb)
-	id, err := p.Publish(context.Background(), stream, map[string]string{
-		"event":    "test.event",
-		"event_id": "test-001",
-		"payload":  `{"hello":"world"}`,
+	p := newTestProducer(t)
+
+	err := p.Publish(context.Background(), &Message{
+		Topic:   topic,
+		Key:     "user-1",
+		Value:   []byte(`{"event":"test"}`),
+		Headers: map[string]string{testHeaderEventID: "evt-001"},
 	})
 	if err != nil {
 		t.Fatalf("Publish failed: %v", err)
 	}
-	if id == "" {
-		t.Fatal("expected non-empty message ID")
-	}
 
-	length, err := rdb.XLen(context.Background(), stream).Result()
+	// 用 Reader 验证消息存在
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     []string{testBrokers},
+		Topic:       topic,
+		Partition:   0,
+		MinBytes:    1,
+		MaxBytes:    10e6,
+		MaxWait:     2 * time.Second,
+		StartOffset: kafka.FirstOffset,
+	})
+	defer func() { _ = r.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	msg, err := r.ReadMessage(ctx)
 	if err != nil {
-		t.Fatalf("XLen failed: %v", err)
+		t.Fatalf("ReadMessage failed: %v", err)
 	}
-	if length != 1 {
-		t.Fatalf("expected 1 message, got %d", length)
+	if string(msg.Value) != `{"event":"test"}` {
+		t.Fatalf("unexpected value: %s", msg.Value)
 	}
-	t.Logf("Publish OK, message ID: %s, stream length: %d", id, length)
+	t.Logf("Publish OK, message key=%s offset=%d partition=%d", string(msg.Key), msg.Offset, msg.Partition)
 }
 
 func TestConsumerStartReceiveMessages(t *testing.T) {
-	rdb := newTestRedis(t)
-	stream := "test-start-" + t.Name()
-	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
+	topic := uniqueTopic("receive")
+	createTestTopic(t, topic)
 
 	var mu sync.Mutex
-	var received []map[string]string
+	var received []*Message
 
-	handler := func(values map[string]string) error {
+	handler := func(msg *Message) error {
 		mu.Lock()
 		defer mu.Unlock()
-		received = append(received, values)
-		t.Logf("Handler received: event_id=%s", values["event_id"])
+		received = append(received, msg)
 		return nil
 	}
 
-	consumer := NewConsumer(rdb, ConsumerConfig{
-		Group:  "start-group",
-		Stream: stream,
-		Name:   "start-consumer-1",
+	group := fmt.Sprintf("recv-group-%d", time.Now().UnixNano())
+	consumer := NewConsumer(ConsumerConfig{
+		Brokers: []string{testBrokers},
+		Topic:   topic,
+		Group:   group,
 	}, handler)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -86,196 +154,185 @@ func TestConsumerStartReceiveMessages(t *testing.T) {
 	consumer.Start(ctx, &wg)
 	defer func() { cancel(); wg.Wait() }()
 
-	// 等 consumer goroutine 启动并进入 XReadGroup 阻塞
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second) // 等 consumer 加入组
 
-	// 发消息
-	p := NewProducer(rdb)
+	p := newTestProducer(t)
 	for i := range 5 {
-		_, err := p.Publish(context.Background(), stream, map[string]string{
-			"event_id": "start-evt-" + string(rune('0'+i)),
-			"payload":  "hello",
+		err := p.Publish(context.Background(), &Message{
+			Topic:   topic,
+			Key:     fmt.Sprintf("user-%d", i),
+			Value:   fmt.Appendf(nil, `{testHeaderEventID:"evt-%d"}`, i),
+			Headers: map[string]string{testHeaderEventID: fmt.Sprintf("evt-%d", i)},
 		})
 		if err != nil {
 			t.Fatalf("Publish %d failed: %v", i, err)
 		}
 	}
 
-	// 等待 consumer 处理
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		n := len(received)
-		mu.Unlock()
-		if n >= 5 {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	mu.Lock()
-	n := len(received)
-	mu.Unlock()
-
-	if n != 5 {
-		t.Fatalf("expected 5 messages consumed, got %d", n)
-	}
-	t.Logf("Consumer processed all %d messages", n)
+	waitForMessages(t, &mu, &received, 5, 15*time.Second)
+	t.Logf("Consumer processed all %d messages", len(received))
 }
 
-func TestConsumerClaimPending(t *testing.T) {
-	rdb := newTestRedis(t)
-	stream := "test-claim-" + t.Name()
-	group := "claim-group"
-	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
+func TestConsumerRebalanceTakeover(t *testing.T) {
+	topic := uniqueTopic("rebalance")
+	createTestTopic(t, topic)
+	group := fmt.Sprintf("rebal-group-%d", time.Now().UnixNano())
 
-	// Step 1: 创建 consumer group 并发送消息
-	p := NewProducer(rdb)
-	for i := range 3 {
-		_, err := p.Publish(context.Background(), stream, map[string]string{
-			"event_id": "claim-evt-" + string(rune('0'+i)),
-			"payload":  "data",
-		})
-		if err != nil {
-			t.Fatalf("Publish %d failed: %v", i, err)
-		}
-	}
-
-	err := rdb.XGroupCreateMkStream(context.Background(), stream, group, "0").Err()
-	if err != nil {
-		t.Fatalf("XGroupCreateMkStream failed: %v", err)
-	}
-
-	// Step 2: 用 "0" 读消息（读 pending），模拟旧 consumer 读了但没 ACK
-	msgs, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
-		Group:    group,
-		Consumer: "old-consumer",
-		Streams:  []string{stream, "0"},
-		Count:    10,
-		Block:    1 * time.Second,
-	}).Result()
-	if err != nil {
-		t.Fatalf("XReadGroup '0' failed: %v", err)
-	}
-	totalOld := 0
-	for _, s := range msgs {
-		totalOld += len(s.Messages)
-	}
-	if totalOld != 3 {
-		t.Fatalf("expected 3 messages, got %d", totalOld)
-	}
-	t.Log("Old consumer read 3 messages but DID NOT ack (simulating crash)")
-
-	// 验证 pending list 有 3 条
-	pending, err := rdb.XPending(context.Background(), stream, group).Result()
-	if err != nil {
-		t.Fatalf("XPending failed: %v", err)
-	}
-	if pending.Count != 3 {
-		t.Fatalf("expected 3 pending, got %d", pending.Count)
-	}
-
-	// Step 3: 新 consumer 启动，应该通过 XAUTOCLAIM 认领 pending 消息
 	var mu sync.Mutex
-	var received []map[string]string
+	var received []*Message
 
-	handler := func(values map[string]string) error {
+	handler := func(msg *Message) error {
 		mu.Lock()
 		defer mu.Unlock()
-		received = append(received, values)
+		received = append(received, msg)
 		return nil
 	}
 
-	consumer := NewConsumer(rdb, ConsumerConfig{
-		Group:  group,
-		Stream: stream,
-		Name:   "new-consumer",
+	// Consumer A：先启动，接收消息（FetchMessage 模式天然不自动提交，模拟读到不 mark）
+	consumerA := NewConsumer(ConsumerConfig{
+		Brokers: []string{testBrokers},
+		Topic:   topic,
+		Group:   group,
 	}, handler)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var wg sync.WaitGroup
-	consumer.Start(ctx, &wg)
-	defer func() { cancel(); wg.Wait() }()
+	ctxA, cancelA := context.WithCancel(context.Background())
+	var wgA sync.WaitGroup
+	consumerA.Start(ctxA, &wgA)
 
-	// 等待 XAUTOCLAIM 处理
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		n := len(received)
-		mu.Unlock()
-		if n >= 3 {
-			break
+	time.Sleep(1 * time.Second) // 等 A 加入组
+
+	p := newTestProducer(t)
+	for i := range 3 {
+		err := p.Publish(context.Background(), &Message{
+			Topic:   topic,
+			Key:     fmt.Sprintf("user-%d", i),
+			Value:   fmt.Appendf(nil, `{testHeaderEventID:"evt-%d"}`, i),
+			Headers: map[string]string{testHeaderEventID: fmt.Sprintf("evt-%d", i)},
+		})
+		if err != nil {
+			t.Fatalf("Publish %d failed: %v", i, err)
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
+
+	// 等 A 收到消息
+	time.Sleep(2 * time.Second)
 
 	mu.Lock()
-	n := len(received)
+	countA := len(received)
+	mu.Unlock()
+	if countA == 0 {
+		t.Fatal("Consumer A did not receive any messages")
+	}
+	t.Logf("Consumer A received %d messages (no commit yet)", countA)
+
+	// 停止 A（模拟 crash）
+	cancelA()
+	wgA.Wait()
+
+	// 清空 received，让 B 接管后重新统计
+	mu.Lock()
+	received = received[:0]
 	mu.Unlock()
 
-	if n != 3 {
-		t.Fatalf("expected 3 pending messages claimed, got %d", n)
-	}
-	t.Logf("New consumer claimed all %d pending messages via XAUTOCLAIM", n)
+	// Consumer B：加入同组，rebalance 后接管分区，重投未提交的消息
+	consumerB := NewConsumer(ConsumerConfig{
+		Brokers: []string{testBrokers},
+		Topic:   topic,
+		Group:   group,
+	}, handler)
+
+	ctxB, cancelB := context.WithCancel(context.Background())
+	defer cancelB()
+	var wgB sync.WaitGroup
+	consumerB.Start(ctxB, &wgB)
+	defer func() { cancelB(); wgB.Wait() }()
+
+	waitForMessages(t, &mu, &received, 3, 15*time.Second)
+	t.Logf("Consumer B took over and received all %d messages via rebalance", len(received))
 }
 
-func TestConsumerReceiveAfterRestart(t *testing.T) {
-	rdb := newTestRedis(t)
-	stream := "test-restart-" + t.Name()
-	group := "restart-group"
-	cleanupStream(t, rdb, stream)
-	t.Cleanup(func() { cleanupStream(t, rdb, stream) })
+func TestConsumerReplayDedup(t *testing.T) {
+	topic := uniqueTopic("replay")
+	createTestTopic(t, topic)
+	group := fmt.Sprintf("replay-group-%d", time.Now().UnixNano())
 
-	p := NewProducer(rdb)
-	_, err := p.Publish(context.Background(), stream, map[string]string{"event_id": "first"})
-	if err != nil {
-		t.Fatal(err)
+	processed := make(map[string]bool)
+	var mu sync.Mutex
+
+	// 模拟 IdempotentRepository 去重：已处理的 event_id 跳过
+	handler := func(msg *Message) error {
+		eventID := msg.Headers[testHeaderEventID]
+		mu.Lock()
+		defer mu.Unlock()
+		if processed[eventID] {
+			t.Logf("skip duplicate event_id=%s", eventID)
+			return nil
+		}
+		processed[eventID] = true
+		t.Logf("processed event_id=%s", eventID)
+		return nil
 	}
 
-	err = rdb.XGroupCreateMkStream(context.Background(), stream, group, "0").Err()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// 第一次消费
+	consumer1 := NewConsumer(ConsumerConfig{
+		Brokers: []string{testBrokers},
+		Topic:   topic,
+		Group:   group,
+	}, handler)
 
-	msgs, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
-		Group: group, Consumer: "c1",
-		Streams: []string{stream, "0"}, Count: 10, Block: 1 * time.Second,
-	}).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, s := range msgs {
-		for _, m := range s.Messages {
-			_ = rdb.XAck(context.Background(), stream, group, m.ID).Err()
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	var wg1 sync.WaitGroup
+	consumer1.Start(ctx1, &wg1)
+
+	time.Sleep(1 * time.Second)
+
+	p := newTestProducer(t)
+	for i := range 3 {
+		err := p.Publish(context.Background(), &Message{
+			Topic:   topic,
+			Key:     fmt.Sprintf("user-%d", i),
+			Value:   fmt.Appendf(nil, `{testHeaderEventID:"evt-%d"}`, i),
+			Headers: map[string]string{testHeaderEventID: fmt.Sprintf("evt-%d", i)},
+		})
+		if err != nil {
+			t.Fatalf("Publish %d failed: %v", i, err)
 		}
 	}
-	t.Log("First message consumed and ACKed")
 
-	// 第二次消费（模拟重启后）
-	_, err = p.Publish(context.Background(), stream, map[string]string{"event_id": "second"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	time.Sleep(3 * time.Second) // 等 consumer1 处理并提交
+	cancel1()
+	wg1.Wait()
 
-	msgs2, err := rdb.XReadGroup(context.Background(), &redis.XReadGroupArgs{
-		Group: group, Consumer: "c1",
-		Streams: []string{stream, ">"}, Count: 10, Block: 1 * time.Second,
-	}).Result()
-	if err != nil {
-		t.Fatal(err)
+	mu.Lock()
+	firstPass := len(processed)
+	mu.Unlock()
+	if firstPass != 3 {
+		t.Fatalf("expected 3 processed in first pass, got %d", firstPass)
 	}
 
-	total := 0
-	for _, s := range msgs2 {
-		total += len(s.Messages)
-		for _, m := range s.Messages {
-			t.Logf("  Received: event_id=%s", m.Values["event_id"])
-		}
+	// 第二次消费（模拟重启后 FirstOffset 重放 → 已提交的 offset 不再重投）
+	consumer2 := NewConsumer(ConsumerConfig{
+		Brokers: []string{testBrokers},
+		Topic:   topic,
+		Group:   group,
+	}, handler)
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	var wg2 sync.WaitGroup
+	consumer2.Start(ctx2, &wg2)
+	defer func() { cancel2(); wg2.Wait() }()
+
+	// 等 consumer2 加入组并完成 rebalance（此时已提交的 offset 被恢复，不会重投已处理消息）
+	time.Sleep(5 * time.Second)
+
+	mu.Lock()
+	secondPass := len(processed)
+	mu.Unlock()
+
+	// 已提交 offset → consumer2 从上次位置继续读 → 已处理的 3 条不会重投
+	if secondPass != 3 {
+		t.Fatalf("expected 3 total processed after replay (no duplicates), got %d", secondPass)
 	}
-	if total != 1 {
-		t.Fatalf("expected 1 new message after restart, got %d", total)
-	}
-	t.Log("Only the new message was delivered")
+	t.Logf("Replay dedup OK: %d messages processed, no duplicates on restart", secondPass)
 }

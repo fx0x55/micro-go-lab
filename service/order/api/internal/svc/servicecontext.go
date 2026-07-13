@@ -23,18 +23,21 @@ import (
 )
 
 type ServiceContext struct {
-	Config      config.Config
-	DB          *gorm.DB
-	OrderRepo   repository.OrderRepositoryInterface
-	UserCli     userservice.UserService
-	RpcCli      zrpc.Client
-	Redis       *redis.Client
-	OutboxRepo  *xevent.OutboxRepository
-	Producer    *xstream.Producer
-	Poller      *xstream.Poller
-	RateLimiter *middleware.RedisRateLimiter
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	Config         config.Config
+	DB             *gorm.DB
+	OrderRepo      repository.OrderRepositoryInterface
+	UserCli        userservice.UserService
+	RpcCli         zrpc.Client
+	Redis          *redis.Client
+	OutboxRepo     *xevent.OutboxRepository
+	Producer       *xstream.Producer
+	Poller         *xstream.Poller
+	Consumer       *xstream.Consumer
+	IdempotentRepo *xevent.IdempotentRepository
+	RateLimiter    *middleware.RedisRateLimiter
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 }
 
 func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
@@ -58,7 +61,10 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	ctx, cancel := context.WithCancel(ctx)
 
 	outboxRepo := xevent.NewOutboxRepository(gormDB)
-	producer := xstream.NewProducer(redisClient)
+	producer, err := xstream.NewProducer(c.Kafka.BootstrapServers)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create kafka producer: %v", err))
+	}
 	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
 
 	rateLimiter := middleware.NewRedisRateLimiter(
@@ -67,17 +73,28 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	)
 
 	sc := &ServiceContext{
-		Config:      *c,
-		DB:          gormDB,
-		OrderRepo:   repository.NewOrderRepository(gormDB),
-		UserCli:     userservice.NewUserService(rpcCli),
-		RpcCli:      rpcCli,
-		Redis:       redisClient,
-		OutboxRepo:  outboxRepo,
-		Producer:    producer,
-		Poller:      poller,
-		RateLimiter: rateLimiter,
-		cancel:      cancel,
+		Config:         *c,
+		DB:             gormDB,
+		OrderRepo:      repository.NewOrderRepository(gormDB),
+		UserCli:        userservice.NewUserService(rpcCli),
+		RpcCli:         rpcCli,
+		Redis:          redisClient,
+		OutboxRepo:     outboxRepo,
+		Producer:       producer,
+		Poller:         poller,
+		IdempotentRepo: xevent.NewIdempotentRepository(gormDB),
+		RateLimiter:    rateLimiter,
+		ctx:            ctx,
+		cancel:         cancel,
+	}
+
+	// 消费 user-events Kafka topic（CQRS：维护 known_users 物化视图）
+	if c.Kafka.Topic != "" && c.Kafka.GroupID != "" {
+		sc.Consumer = xstream.NewConsumer(xstream.ConsumerConfig{
+			Brokers: c.Kafka.BootstrapServers,
+			Topic:   c.Kafka.Topic,
+			Group:   c.Kafka.GroupID,
+		}, sc.handleUserEvent)
 	}
 
 	poller.Start(ctx, &sc.wg)
@@ -85,8 +102,18 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	return sc
 }
 
+// Start 启动后台 goroutine（Consumer）。在 main 完成 svcCtx 构造后调用。
+func (sc *ServiceContext) Start() {
+	if sc.Consumer != nil {
+		sc.Consumer.Start(sc.ctx, &sc.wg)
+	}
+}
+
 func (sc *ServiceContext) Stop() {
 	sc.cancel()
 	sc.wg.Wait()
+	if sc.Producer != nil {
+		_ = sc.Producer.Close()
+	}
 	logx.Info("all background goroutines stopped")
 }

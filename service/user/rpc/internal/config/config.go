@@ -14,6 +14,7 @@ type Config struct {
 	Database   config.DatabaseConfig
 	RedisCache config.RedisConfig
 	Cache      config.CacheConfig
+	Kafka      config.KafkaConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -48,4 +49,5 @@ func (c *Config) ApplyEnvOverrides() {
 			c.Cache.NegativeTTL = dur
 		}
 	}
+	c.Kafka.ApplyEnvOverrides()
 }

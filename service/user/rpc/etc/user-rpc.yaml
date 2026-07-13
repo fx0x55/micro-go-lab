@@ -38,6 +38,12 @@ Cache:
   TTL: 5m
   NegativeTTL: 30s
 
+Kafka:
+  BootstrapServers:
+    - localhost:9094
+    - localhost:9095
+    - localhost:9096
+
 Prometheus:
   Host: 0.0.0.0
   Port: 9103

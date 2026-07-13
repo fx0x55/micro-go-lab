@@ -15,18 +15,22 @@
                          ▼                       ▼
                   ┌──────────────────────────────────┐
                   │  user-rpc  gRPC :9090            │
-                  │  用户域唯一所有者                 │
-                  │  CreateUser / Authenticate       │
-                  │  ValidateUser / GetUser          │
-                  └──────┬───────────────────────────┘
-                         │
-                ┌────────┴────────┐
-                ▼                 ▼
-          ┌──────────┐       ┌──────────┐
-          │  MySQL   │       │  Redis   │
-          │ users_db │       │ Stream + │
-          │ (GORM)   │       │  cache   │
-          └──────────┘       └──────────┘
+          │  用户域唯一所有者                 │
+          │  CreateUser / Authenticate       │
+          │  ValidateUser / GetUser          │
+          └──────┬───────────────────────────┘
+                 │
+               ┌────────┴────────┐
+               ▼                 ▼
+         ┌──────────┐       ┌──────────┐
+         │  MySQL   │       │  Redis   │
+         │ users_db │       │  cache   │
+         │ (GORM)   │       └──────────┘
+         └──────────┘
+         │                   ┌──────────┐
+         │                   │  Kafka   │
+         └──────────────────▶│ (3 KRaft)│
+                             └──────────┘
 ```
 
 **三个服务：**
@@ -44,6 +48,7 @@
 | MySQL | 双库：`users_db`（用户）、`orders_db`（订单） |
 | etcd | 服务注册与发现（user-rpc → user-api / order-api） |
 | Redis | 缓存 / 消息队列（Redis Streams 事务性 Outbox） |
+| Kafka | 消息队列（3 节点 KRaft 集群，事务性 Outbox + CQRS 物化视图） |
 
 ## 快速开始
 

@@ -108,6 +108,22 @@ type CacheConfig struct {
 	NegativeTTL time.Duration `json:",default=30s"`
 }
 
+// KafkaConfig 是 Apache Kafka 连接配置。
+// BootstrapServers 对应 Kafka 集群地址列表（逗号分隔）。
+// GroupID 和 Topic 仅消费者需要（如 order-api 消费 user-events）。
+type KafkaConfig struct {
+	BootstrapServers []string `json:",optional"`
+	GroupID          string   `json:",optional"`
+	Topic            string   `json:",optional"`
+}
+
+// ApplyEnvOverrides 从环境变量读取 KAFKA_BOOTSTRAP_SERVERS（逗号分隔），覆盖 YAML 默认值。
+func (k *KafkaConfig) ApplyEnvOverrides() {
+	if servers := EnvList("KAFKA_BOOTSTRAP_SERVERS"); len(servers) > 0 {
+		k.BootstrapServers = servers
+	}
+}
+
 // CORSConfig 是 CORS 跨域配置。
 // AllowedOrigins 为 ["*"] 时允许所有来源（开发默认）；否则仅允许白名单中的来源。
 type CORSConfig struct {

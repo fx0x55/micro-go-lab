@@ -4,90 +4,178 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
-	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
 const (
-	maxBackoff     = 10 * time.Second
-	pendingIdleMin = 30 * time.Second
-	pendingCount   = 10
+	maxBackoff = 10 * time.Second
 )
 
-// consumerCaller 用于日志标识 panic 发生在哪个消费者 goroutine。
-func consumerCaller(cfg ConsumerConfig) string {
-	return "consumer:" + cfg.Group + "/" + cfg.Name
+// Message 是 Kafka 消息的统一表示，与 broker SDK 解耦。
+type Message struct {
+	Topic     string
+	Partition int
+	Offset    int64
+	Key       string
+	Value     []byte
+	Headers   map[string]string
 }
+
+// toKafkaHeaders 将 map[string]string 转换为 []kafka.Header。
+func toKafkaHeaders(h map[string]string) []kafka.Header {
+	result := make([]kafka.Header, 0, len(h))
+	for k, v := range h {
+		result = append(result, kafka.Header{Key: k, Value: []byte(v)})
+	}
+	return result
+}
+
+// fromKafkaHeaders 将 []kafka.Header 转换为 map[string]string。
+func fromKafkaHeaders(h []kafka.Header) map[string]string {
+	result := make(map[string]string, len(h))
+	for _, hdr := range h {
+		result[hdr.Key] = string(hdr.Value)
+	}
+	return result
+}
+
+// ---------------------------------------------------------------------------
+// Producer
+// ---------------------------------------------------------------------------
+
+// Producer Kafka 同步生产者（封装 kafka.Writer）。
+type Producer struct {
+	writer *kafka.Writer
+}
+
+// NewProducer 创建 Kafka 生产者，并在启动时 ensure 所有 topic 存在。
+func NewProducer(bootstrapServers []string) (*Producer, error) {
+	if err := ensureTopics(bootstrapServers, xevent.TopicSpecs()); err != nil {
+		return nil, fmt.Errorf("ensure topics: %w", err)
+	}
+
+	w := &kafka.Writer{
+		Addr:         kafka.TCP(bootstrapServers...),
+		Balancer:     &kafka.Hash{},
+		RequiredAcks: kafka.RequireAll,
+		MaxAttempts:  5,
+		Async:        false,
+		BatchTimeout: 10 * time.Millisecond,
+	}
+
+	return &Producer{writer: w}, nil
+}
+
+// Publish 同步写入一条消息到 Kafka topic。
+func (p *Producer) Publish(ctx context.Context, msg *Message) error {
+	return p.writer.WriteMessages(ctx, kafka.Message{
+		Topic:   msg.Topic,
+		Key:     []byte(msg.Key),
+		Value:   msg.Value,
+		Headers: toKafkaHeaders(msg.Headers),
+	})
+}
+
+// Close 关闭底层 Writer。
+func (p *Producer) Close() error {
+	return p.writer.Close()
+}
+
+// ensureTopics 用 kafka-go 的 Admin API 创建 topic（已存在则忽略），并尽力设置 topic config。
+func ensureTopics(bootstrapServers []string, specs []xevent.TopicSpec) error {
+	if len(bootstrapServers) == 0 {
+		return errors.New("no bootstrap servers")
+	}
+
+	// 逐个尝试连接 broker，直到成功（集群可能还在启动中）
+	var conn *kafka.Conn
+	var lastErr error
+	for _, broker := range bootstrapServers {
+		c, err := kafka.Dial("tcp", broker)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		conn = c
+		break
+	}
+	if conn == nil {
+		return fmt.Errorf("dial brokers: %w", lastErr)
+	}
+	defer func() { _ = conn.Close() }()
+
+	controller, err := conn.Controller()
+	if err != nil {
+		return fmt.Errorf("get controller: %w", err)
+	}
+	controllerAddr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+
+	topicConn, err := kafka.Dial("tcp", controllerAddr)
+	if err != nil {
+		return fmt.Errorf("dial controller: %w", err)
+	}
+	defer func() { _ = topicConn.Close() }()
+
+	for _, spec := range specs {
+		err := topicConn.CreateTopics(kafka.TopicConfig{
+			Topic:             spec.Name,
+			NumPartitions:     spec.NumPartitions,
+			ReplicationFactor: spec.ReplicationFactor,
+		})
+		if err != nil && !isTopicExistsErr(err) {
+			logx.Error("create topic failed",
+				logx.Field("topic", spec.Name),
+				logx.Field("error", err.Error()))
+		}
+	}
+
+	return nil
+}
+
+// isTopicExistsErr 检查错误是否为 "topic already exists"。
+func isTopicExistsErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "already exists")
+}
+
+// ---------------------------------------------------------------------------
+// Consumer
+// ---------------------------------------------------------------------------
 
 // ConsumerConfig 消费者配置
 type ConsumerConfig struct {
-	Group  string
-	Stream string
-	Name   string // consumer name
+	Brokers []string
+	Topic   string
+	Group   string
 }
 
 // Handler 消息处理函数
-type Handler func(values map[string]string) error
+type Handler func(msg *Message) error
 
-// Producer Redis Streams 生产者
-type Producer struct {
-	rdb    *redis.Client
-	maxLen int64
-}
-
-// NewProducer 创建 Redis Streams 生产者
-func NewProducer(rdb *redis.Client) *Producer {
-	return &Producer{rdb: rdb, maxLen: 10000}
-}
-
-// Publish 写入一条消息到 stream
-func (p *Producer) Publish(ctx context.Context, stream string, values map[string]string) (string, error) {
-	return p.rdb.XAdd(ctx, &redis.XAddArgs{
-		Stream: stream,
-		MaxLen: p.maxLen,
-		Approx: true,
-		Values: values,
-	}).Result()
-}
-
-// Consumer Redis Streams 消费者
+// Consumer Kafka 消费者（基于 kafka.Reader + 消费者组）
 type Consumer struct {
-	rdb     *redis.Client
 	cfg     ConsumerConfig
 	handler Handler
 }
 
-// NewConsumer 创建 Redis Streams 消费者
-func NewConsumer(rdb *redis.Client, cfg ConsumerConfig, handler Handler) *Consumer {
+// NewConsumer 创建 Kafka 消费者
+func NewConsumer(cfg ConsumerConfig, handler Handler) *Consumer {
 	return &Consumer{
-		rdb:     rdb,
 		cfg:     cfg,
 		handler: handler,
 	}
 }
 
-// ensureGroup 创建 consumer group（已存在则忽略）。
-func (c *Consumer) ensureGroup(ctx context.Context) {
-	if err := c.rdb.XGroupCreateMkStream(
-		ctx, c.cfg.Stream, c.cfg.Group, "0",
-	).Err(); err != nil {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "BUSYGROUP") {
-			logx.Info("consumer group already exists",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("group", c.cfg.Group))
-		} else {
-			logx.Error("failed to create consumer group",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("group", c.cfg.Group),
-				logx.Field("error", errMsg))
-		}
-	}
+func consumerCaller(cfg ConsumerConfig) string {
+	return "consumer:" + cfg.Group + "/" + cfg.Topic
 }
 
 // Start 启动消费者（在 goroutine 中运行）。
@@ -97,146 +185,95 @@ func (c *Consumer) Start(ctx context.Context, wg *sync.WaitGroup) {
 	go c.consume(ctx, wg)
 }
 
-func (c *Consumer) claimPending(ctx context.Context) {
-	cursor := "0-0"
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		msgs, newCursor, err := c.rdb.XAutoClaim(ctx, &redis.XAutoClaimArgs{
-			Stream:   c.cfg.Stream,
-			Group:    c.cfg.Group,
-			Consumer: c.cfg.Name,
-			MinIdle:  pendingIdleMin,
-			Start:    cursor,
-			Count:    pendingCount,
-		}).Result()
-		if err != nil {
-			logx.Error("XAUTOCLAIM failed",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("error", err.Error()))
-			return
-		}
-
-		for _, msg := range msgs {
-			if err := c.handler(toStringMap(msg.Values)); err != nil {
-				logx.Error("pending message handler failed",
-					logx.Field("stream", c.cfg.Stream),
-					logx.Field("id", msg.ID),
-					logx.Field("error", err.Error()))
-				xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "error").Inc()
-				continue
-			}
-			_ = c.rdb.XAck(ctx, c.cfg.Stream, c.cfg.Group, msg.ID).Err()
-			xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "success").Inc()
-		}
-
-		if len(msgs) > 0 {
-			logx.Info("claimed pending messages",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("count", len(msgs)))
-		}
-
-		if newCursor == "0-0" {
-			return
-		}
-		cursor = newCursor
-	}
-}
-
 func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	caller := consumerCaller(c.cfg)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	c.ensureGroup(ctx)
-
-	length, _ := c.rdb.XLen(ctx, c.cfg.Stream).Result()
-	logx.Info("consumer starting",
-		logx.Field("stream", c.cfg.Stream),
+	logx.Info("kafka consumer starting",
+		logx.Field("topic", c.cfg.Topic),
 		logx.Field("group", c.cfg.Group),
-		logx.Field("consumer", c.cfg.Name),
-		logx.Field("stream_length", length))
+		logx.Field("brokers", c.cfg.Brokers))
 
-	// 启动时先认领上次未 ACK 的 pending 消息（at-least-once 保证）
-	c.claimPending(ctx)
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:           c.cfg.Brokers,
+		Topic:             c.cfg.Topic,
+		GroupID:           c.cfg.Group,
+		StartOffset:       kafka.FirstOffset,
+		CommitInterval:    0, // 同步提交：处理成功后手动 CommitMessages
+		SessionTimeout:    10 * time.Second,
+		RebalanceTimeout:  10 * time.Second,
+		HeartbeatInterval: 3 * time.Second,
+		MinBytes:          1,
+		MaxBytes:          10e6, // 10MB
+	})
+	defer func() { _ = r.Close() }()
 
-	logx.Info("consumer loop started",
-		logx.Field("stream", c.cfg.Stream),
-		logx.Field("group", c.cfg.Group),
-		logx.Field("consumer", c.cfg.Name))
+	logx.Info("kafka consumer loop started",
+		logx.Field("topic", c.cfg.Topic),
+		logx.Field("group", c.cfg.Group))
 
 	backoff := time.Second
 	for {
 		select {
 		case <-ctx.Done():
-			logx.Info("consumer loop stopping",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("consumer", c.cfg.Name))
+			logx.Info("kafka consumer loop stopping",
+				logx.Field("topic", c.cfg.Topic),
+				logx.Field("group", c.cfg.Group))
 			return
 		default:
 		}
 
-		var readErr error
+		fetchErr := error(nil)
 		RunWithRecover(ctx, caller, func(ctx context.Context) {
-			streams, err := c.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    c.cfg.Group,
-				Consumer: c.cfg.Name,
-				Streams:  []string{c.cfg.Stream, ">"},
-				Count:    10,
-				Block:    2 * time.Second,
-			}).Result()
+			msg, err := r.FetchMessage(ctx)
 			if err != nil {
-				readErr = err
+				fetchErr = err
 				return
 			}
 
-			msgCount := 0
-			for _, stream := range streams {
-				for _, msg := range stream.Messages {
-					msgCount++
-					strValues := toStringMap(msg.Values)
-					if err := c.handler(strValues); err != nil {
-						logx.Error("stream handler failed",
-							logx.Field("stream", c.cfg.Stream),
-							logx.Field("id", msg.ID),
-							logx.Field("error", err.Error()),
-						)
-						xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "error").Inc()
-						continue
-					}
-					_ = c.rdb.XAck(ctx, c.cfg.Stream, c.cfg.Group, msg.ID).Err()
-					xmetrics.RedisStreamMessagesConsumed.WithLabelValues(c.cfg.Stream, c.cfg.Name, "success").Inc()
-				}
+			xMsg := &Message{
+				Topic:     msg.Topic,
+				Partition: msg.Partition,
+				Offset:    msg.Offset,
+				Key:       string(msg.Key),
+				Value:     msg.Value,
+				Headers:   fromKafkaHeaders(msg.Headers),
 			}
-			if msgCount > 0 {
-				logx.Info("consumer batch processed",
-					logx.Field("stream", c.cfg.Stream),
-					logx.Field("consumer", c.cfg.Name),
-					logx.Field("count", msgCount))
+
+			if err := c.handler(xMsg); err != nil {
+				logx.Error("kafka handler failed",
+					logx.Field("topic", msg.Topic),
+					logx.Field("partition", msg.Partition),
+					logx.Field("offset", msg.Offset),
+					logx.Field("error", err.Error()))
+				// 不提交 offset → at-least-once 会重投
+				xmetrics.KafkaMessagesConsumed.WithLabelValues(
+					c.cfg.Topic, c.cfg.Group, strconv.Itoa(msg.Partition), "error").Inc()
+				return
 			}
+
+			// 同步提交 offset
+			if err := r.CommitMessages(ctx, msg); err != nil {
+				logx.Error("kafka commit failed",
+					logx.Field("topic", msg.Topic),
+					logx.Field("partition", msg.Partition),
+					logx.Field("offset", msg.Offset),
+					logx.Field("error", err.Error()))
+			}
+
+			xmetrics.KafkaMessagesConsumed.WithLabelValues(
+				c.cfg.Topic, c.cfg.Group, strconv.Itoa(msg.Partition), "success").Inc()
 		})
 
-		if readErr != nil {
-			if errors.Is(readErr, context.Canceled) {
+		if fetchErr != nil {
+			if errors.Is(fetchErr, context.Canceled) {
 				return
 			}
-
-			// NOGROUP: consumer group 丢失（Redis 重启/key 被删），自动重建。
-			// context.Canceled 在上方已拦截，到达此处 ctx 必定未取消。
-			if strings.Contains(readErr.Error(), "NOGROUP") {
-				logx.Info("consumer group missing, recreating",
-					logx.Field("stream", c.cfg.Stream),
-					logx.Field("group", c.cfg.Group))
-				c.ensureGroup(ctx)
-			}
-
-			// 指数退避，避免 Redis 不可用时疯狂重试打满日志
-			logx.Error("redis stream read failed, retrying",
-				logx.Field("stream", c.cfg.Stream),
-				logx.Field("error", readErr.Error()),
+			logx.Error("kafka fetch failed, retrying",
+				logx.Field("topic", c.cfg.Topic),
+				logx.Field("group", c.cfg.Group),
+				logx.Field("error", fetchErr.Error()),
 				logx.Field("backoff", backoff))
 
 			select {
@@ -246,18 +283,7 @@ func (c *Consumer) consume(ctx context.Context, wg *sync.WaitGroup) {
 			}
 			backoff = min(backoff*2, maxBackoff)
 		} else {
-			backoff = time.Second // 成功读取，重置退避
-			// 每轮成功读取后，扫描是否有残留 pending 消息
-			c.claimPending(ctx)
+			backoff = time.Second
 		}
 	}
-}
-
-// toStringMap 将 map[string]interface{} 转换为 map[string]string
-func toStringMap(m map[string]any) map[string]string {
-	result := make(map[string]string, len(m))
-	for k, v := range m {
-		result[k] = fmt.Sprintf("%v", v)
-	}
-	return result
 }

@@ -18,6 +18,7 @@ type Config struct {
 	UserSvc  commonconfig.UserSvcConfig
 	Redis    commonconfig.RedisConfig
 	CORS     commonconfig.CORSConfig
+	Kafka    commonconfig.KafkaConfig
 }
 
 func (c *Config) ApplyEnvOverrides() {
@@ -46,4 +47,5 @@ func (c *Config) ApplyEnvOverrides() {
 		c.Redis.Host = s
 	}
 	c.CORS.ApplyEnvOverrides()
+	c.Kafka.ApplyEnvOverrides()
 }
