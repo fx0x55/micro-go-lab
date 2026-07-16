@@ -23,21 +23,22 @@ import (
 )
 
 type ServiceContext struct {
-	Config         config.Config
-	DB             *gorm.DB
-	OrderRepo      repository.OrderRepositoryInterface
-	UserCli        userservice.UserService
-	RpcCli         zrpc.Client
-	Redis          *redis.Client
-	OutboxRepo     *xevent.OutboxRepository
-	Producer       *xstream.Producer
-	Poller         *xstream.Poller
-	Consumer       *xstream.Consumer
-	IdempotentRepo *xevent.IdempotentRepository
-	RateLimiter    *middleware.RedisRateLimiter
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
+	Config            config.Config
+	DB                *gorm.DB
+	OrderRepo         repository.OrderRepositoryInterface
+	UserCli           userservice.UserService
+	RpcCli            zrpc.Client
+	Redis             *redis.Client
+	OutboxRepo        *xevent.OutboxRepository
+	Producer          *xstream.Producer
+	Poller            *xstream.Poller
+	Consumer          *xstream.Consumer
+	InventoryConsumer *xstream.Consumer
+	IdempotentRepo    *xevent.IdempotentRepository
+	RateLimiter       *middleware.RedisRateLimiter
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
 }
 
 func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
@@ -97,6 +98,15 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 		}, sc.handleUserEvent)
 	}
 
+	// 消费 inventory-events Kafka topic（Saga：处理库存预占结果）
+	if c.Kafka.InventoryTopic != "" && c.Kafka.GroupID != "" {
+		sc.InventoryConsumer = xstream.NewConsumer(xstream.ConsumerConfig{
+			Brokers: c.Kafka.BootstrapServers,
+			Topic:   c.Kafka.InventoryTopic,
+			Group:   c.Kafka.GroupID,
+		}, sc.handleInventoryEvent)
+	}
+
 	poller.Start(ctx, &sc.wg)
 
 	return sc
@@ -106,6 +116,9 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 func (sc *ServiceContext) Start() {
 	if sc.Consumer != nil {
 		sc.Consumer.Start(sc.ctx, &sc.wg)
+	}
+	if sc.InventoryConsumer != nil {
+		sc.InventoryConsumer.Start(sc.ctx, &sc.wg)
 	}
 }
 

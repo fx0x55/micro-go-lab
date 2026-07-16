@@ -21,6 +21,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -o /order-api ./service/order/api
 
+FROM builder AS build-inventory-rpc
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 go build -o /inventory-rpc ./service/inventory/rpc
+
 # === Debug builds (with Delve) ===
 FROM builder AS build-user-api-debug
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
@@ -39,6 +44,12 @@ RUN go install github.com/go-delve/delve/cmd/dlv@latest
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -gcflags="all=-N -l" -o /order-api ./service/order/api
+
+FROM builder AS build-inventory-rpc-debug
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 go build -gcflags="all=-N -l" -o /inventory-rpc ./service/inventory/rpc
 
 # === Release runtime ===
 FROM alpine:3.21 AS user-api
@@ -64,6 +75,14 @@ COPY --from=build-order-api /order-api .
 COPY service/order/api/etc/ ./etc/
 EXPOSE 8081
 CMD ["./order-api"]
+
+FROM alpine:3.21 AS inventory-rpc
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=build-inventory-rpc /inventory-rpc .
+COPY service/inventory/rpc/etc/ ./etc/
+EXPOSE 9091
+CMD ["./inventory-rpc"]
 
 # === Debug runtime (with Delve) ===
 FROM alpine:3.21 AS user-api-debug
@@ -92,3 +111,12 @@ COPY --from=build-order-api-debug /order-api .
 COPY service/order/api/etc/ ./etc/
 EXPOSE 8081 40003
 CMD ["dlv", "--listen=:40003", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "./order-api"]
+
+FROM alpine:3.21 AS inventory-rpc-debug
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=build-inventory-rpc-debug /go/bin/dlv /usr/local/bin/dlv
+COPY --from=build-inventory-rpc-debug /inventory-rpc .
+COPY service/inventory/rpc/etc/ ./etc/
+EXPOSE 9091 40004
+CMD ["dlv", "--listen=:40004", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "./inventory-rpc"]

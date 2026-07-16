@@ -96,6 +96,8 @@ func (l *CreateOrderLogic) createOrder(userID uint, req *types.CreateOrderReques
 
 	order := &model.Order{
 		UserID:      userID,
+		Sku:         req.Sku,
+		Quantity:    req.Quantity,
 		ProductName: req.ProductName,
 		Amount:      req.Amount,
 		Status:      model.StatusPending,
@@ -113,6 +115,8 @@ func (l *CreateOrderLogic) createOrder(userID uint, req *types.CreateOrderReques
 			Data: xevent.OrderCreatedData{
 				OrderID:     order.ID,
 				UserID:      order.UserID,
+				Sku:         order.Sku,
+				Quantity:    order.Quantity,
 				ProductName: order.ProductName,
 				Amount:      order.Amount,
 				Status:      order.Status,

@@ -5,6 +5,8 @@ package types
 
 type CreateOrderRequest struct {
 	ProductName string `json:"product_name" validate:"required,min=1,max=256"`
+	Sku         string `json:"sku"          validate:"required,min=1,max=64"`
+	Quantity    int    `json:"quantity"     validate:"required,min=1"`
 	Amount      int64  `json:"amount"       validate:"required,gt=0"`
 }
 

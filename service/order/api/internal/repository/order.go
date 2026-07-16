@@ -14,6 +14,9 @@ type OrderRepositoryInterface interface {
 	FindByUserID(ctx context.Context, userID uint) ([]model.Order, error)
 	FindByUserIDWithPage(ctx context.Context, userID uint, offset, limit int) ([]model.Order, int64, error)
 	UpdateStatus(ctx context.Context, userID, id uint, fromStatus, toStatus string, version int) (int64, error)
+	// Cancel 在事务内取消订单（乐观锁 + cancel_reason），用于触发 saga 补偿。
+	// 返回取消后的订单（含 Sku/Quantity），供调用方构建 outbox 事件。
+	Cancel(tx *gorm.DB, userID, id uint, version int, reason string) (int64, *model.Order, error)
 }
 
 type OrderRepository struct {
@@ -74,4 +77,32 @@ func (r *OrderRepository) UpdateStatus(
 			"version": gorm.Expr("version + 1"),
 		})
 	return result.RowsAffected, result.Error
+}
+
+func (r *OrderRepository) Cancel(
+	tx *gorm.DB,
+	userID, id uint,
+	version int,
+	reason string,
+) (int64, *model.Order, error) {
+	result := tx.
+		Model(&model.Order{}).
+		Where("id = ? AND user_id = ? AND status = ? AND version = ?", id, userID, model.StatusPending, version).
+		Updates(map[string]any{
+			"status":        model.StatusCancelled,
+			"version":       gorm.Expr("version + 1"),
+			"cancel_reason": reason,
+		})
+	if result.Error != nil {
+		return 0, nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return 0, nil, nil
+	}
+
+	var order model.Order
+	if err := tx.Where("id = ?", id).First(&order).Error; err != nil {
+		return 0, nil, err
+	}
+	return result.RowsAffected, &order, nil
 }

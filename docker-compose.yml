@@ -188,6 +188,29 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis
+     KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+
+  inventory-rpc:
+    build:
+      context: .
+      target: inventory-rpc
+    ports:
+      - "9091:9091"
+      - "9104:9104"
+    labels:
+      logging: "promtail"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: mysql
+      ETCD_HOSTS: "etcd:2379"
+      ETCD_KEY: "inventory-svc.rpc"
+      OTLP_ENDPOINT: jaeger:4317
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
 
   # === Services (Delve debug mode) ===

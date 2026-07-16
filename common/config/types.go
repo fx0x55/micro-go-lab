@@ -115,6 +115,8 @@ type KafkaConfig struct {
 	BootstrapServers []string `json:",optional"`
 	GroupID          string   `json:",optional"`
 	Topic            string   `json:",optional"`
+	// InventoryTopic 仅 order-api 需要：消费 inventory-events 的 topic。
+	InventoryTopic string `json:",optional"`
 }
 
 // ApplyEnvOverrides 从环境变量读取 KAFKA_BOOTSTRAP_SERVERS（逗号分隔），覆盖 YAML 默认值。

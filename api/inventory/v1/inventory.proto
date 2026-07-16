@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package inventory.v1;
+
+option go_package = "github.com/fx0x55/micro-go-lab/service/inventory/rpc/pb;pb";
+
+// InventoryService 提供库存只读查询接口。
+// 写操作（预占/释放）只走事件（order-events / inventory-events），不暴露 gRPC。
+service InventoryService {
+  // GetStock 查询指定 SKU 的库存可用量（只读）
+  rpc GetStock(GetStockRequest) returns (GetStockResponse);
+}
+
+message GetStockRequest {
+  string sku = 1;
+}
+
+message GetStockResponse {
+  string sku = 1;
+  int64 total = 2;
+  int64 available = 3;
+}

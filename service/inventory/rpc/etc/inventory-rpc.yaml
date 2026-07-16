@@ -1,0 +1,43 @@
+Name: inventory-rpc
+ListenOn: 0.0.0.0:9091
+Mode: dev
+
+Health: true
+Etcd:
+  Hosts:
+    - localhost:2379
+  Key: inventory-svc.rpc
+
+Database:
+  Host: localhost
+  Port: 3306
+  User: root
+  Password: root
+  DBName: inventory_db
+  MaxOpenConns: 25
+  MaxIdleConns: 10
+
+Telemetry:
+  Endpoint: localhost:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc
+
+Log:
+  ServiceName: inventory-rpc
+  Mode: console
+  Encoding: json
+  Level: debug
+  Stat: false
+
+Kafka:
+  BootstrapServers:
+    - localhost:9094
+    - localhost:9095
+    - localhost:9096
+  GroupID: inventory-rpc
+  Topic: order-events
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9104
+  Path: /metrics

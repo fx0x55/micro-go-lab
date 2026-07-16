@@ -1,6 +1,6 @@
 .PHONY: run-user-api run-user-rpc run-order-api build test clean docker-up docker-down proto lint install-lint \
-       infra infra-full infra-down dev-user-api dev-user-rpc dev-order-api \
-       debug debug-user-api debug-user-rpc debug-order-api
+       infra infra-full infra-down dev-user-api dev-user-rpc dev-order-api dev-inventory-rpc \
+       debug debug-user-api debug-user-rpc debug-order-api debug-inventory-rpc
 
 run-user-api:
 	go run ./service/user/api
@@ -11,10 +11,14 @@ run-user-rpc:
 run-order-api:
 	go run ./service/order/api
 
+run-inventory-rpc:
+	go run ./service/inventory/rpc
+
 build:
 	go build -o bin/user-api ./service/user/api
 	go build -o bin/user-rpc ./service/user/rpc
 	go build -o bin/order-api ./service/order/api
+	go build -o bin/inventory-rpc ./service/inventory/rpc
 
 test:
 	go test ./... -v
@@ -88,6 +92,9 @@ dev-user-rpc: infra
 dev-order-api: infra
 	KAFKA_BOOTSTRAP_SERVERS=localhost:9094,localhost:9095,localhost:9096 go run ./service/order/api
 
+dev-inventory-rpc: infra
+	KAFKA_BOOTSTRAP_SERVERS=localhost:9094,localhost:9095,localhost:9096 go run ./service/inventory/rpc
+
 # === Container debug (Delve) ===
 debug:
 	docker compose --profile debug up -d --build
@@ -101,6 +108,9 @@ debug-user-rpc:
 debug-order-api:
 	docker compose --profile debug up -d --build order-api-debug
 
+debug-inventory-rpc:
+	docker compose --profile debug up -d --build inventory-rpc-debug
+
 # === API code generation (goctl api go) ===
 # 重新生成 types.go + routes.go（覆盖），handler/logic/svc/config 因"存在即跳过"保留。
 gen-user-api:
@@ -109,4 +119,19 @@ gen-user-api:
 gen-order-api:
 	goctl api go -api service/order/api/order.api -dir service/order/api --style=goZero
 
+gen-inventory-rpc:
+	goctl rpc protoc api/inventory/v1/inventory.proto \
+	  --proto_path=api/inventory/v1 \
+	  --go_out=. --go-grpc_out=. \
+	  --go_opt=module=github.com/fx0x55/micro-go-lab \
+	  --go-grpc_opt=module=github.com/fx0x55/micro-go-lab \
+	  --zrpc_out=service/inventory/rpc --style=goZero
+	sed -i '' 's/pb_pb\./pb./g' \
+	  service/inventory/rpc/inventoryservice/*.go \
+	  service/inventory/rpc/internal/server/*.go \
+	  service/inventory/rpc/internal/logic/*.go
+	rm -f service/inventory/rpc/inventory.v1.go service/inventory/rpc/etc/inventory.v1.yaml
+
 gen-api: gen-user-api gen-order-api
+gen-rpc: gen-inventory-rpc
+gen: gen-api gen-rpc
