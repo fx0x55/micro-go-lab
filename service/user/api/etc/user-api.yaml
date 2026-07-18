@@ -116,19 +116,17 @@ Shutdown:
   WaitTime: 5.5s
 
 # --- 内置开发服务器（devserver.Config） 默认在 6060 端口启动，提供 pprof、healthz、metrics ---
-# DevServer:
-#   # 是否启用开发服务器
-#   Enabled: true
-#   Host: 0.0.0.0
-#   Port: 6060
-#   # 健康检查路径
-#   HealthPath: /healthz
-#   # 健康检查响应体
-#   HealthResponse: "OK"
-#   # 是否暴露 Prometheus 指标（通过 DevServer 端口）
-#   EnableMetrics: true
-#   # 是否暴露 pprof 性能分析接口
-#   EnablePprof: true
+# pprof / healthz / metrics 三合一调试端口，排查 CPU/内存/goroutine 问题的入口。
+# 与其他服务错开端口：order-api=6060（lab 主目标）/ user-api=6061 / user-rpc=6062 / inventory-rpc=6063。
+# 生产环境应绑 127.0.0.1 或通过环境变量关闭，保证仅内网可达。
+DevServer:
+  Enabled: true
+  Host: 0.0.0.0
+  Port: 6061
+  HealthPath: /healthz
+  HealthResponse: "OK"
+  EnableMetrics: true
+  EnablePprof: true
 
 # ============================================================
 # 自定义业务配置（项目 common/config + 各服务 config 定义）

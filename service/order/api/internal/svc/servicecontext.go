@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"os"
+	"strconv"
 
 	"github.com/fx0x55/micro-go-lab/common/client"
 	"github.com/fx0x55/micro-go-lab/common/middleware"
@@ -68,9 +70,18 @@ func NewServiceContext(ctx context.Context, c *config.Config) *ServiceContext {
 	}
 	poller := xstream.NewPoller(outboxRepo, producer, 5*time.Second, 100)
 
+	// rateLimitPerMin 默认 100 次/分钟/IP；压测/troubleshooting lab 时用 BUG_LOAD_RATE 调高绕过。
+	rateLimitPerMin := 100
+	if v := os.Getenv("BUG_LOAD_RATE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			rateLimitPerMin = n
+		}
+	}
+
 	rateLimiter := middleware.NewRedisRateLimiter(
 		gozeroRedis.New(c.Redis.Addr(), gozeroRedis.WithPass(c.Redis.Password)),
-		100, time.Minute, "ratelimit:order-api:",
+		// 默认 100 次/分钟/IP；troubleshooting lab 压 CPU 时用 BUG_LOAD_RATE 调高（如 100000）绕过限流。
+		rateLimitPerMin, time.Minute, "ratelimit:order-api:",
 	)
 
 	sc := &ServiceContext{

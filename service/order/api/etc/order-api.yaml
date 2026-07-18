@@ -3,6 +3,25 @@ Host: 0.0.0.0
 Port: 8081
 Mode: dev
 
+# --- 内置开发服务器（devserver.Config） ---
+# pprof / healthz / metrics 三合一调试端口，是排查 CPU/内存/goroutine 问题的入口。
+# 本服务是 troubleshooting lab 的主注入点，固定用 6060。
+# 生产环境应绑 127.0.0.1 或通过环境变量关闭，保证仅内网可达。
+DevServer:
+  Enabled: true
+  Host: 0.0.0.0
+  Port: 6060
+  HealthPath: /healthz
+  HealthResponse: "OK"
+  EnableMetrics: true
+  EnablePprof: true
+
+# 关闭熔断中间件：troubleshooting lab 里 user-rpc 未启动，ValidateUser 必然失败，
+# 会触发 go-zero breaker 打开并把后续请求直接 503 drop，导致 CPU bug 无法被压测触发。
+# 生产环境保持默认（Breaker: true），这里仅 dev 实验时关闭。
+Middlewares:
+  Breaker: false
+
 Log:
   ServiceName: order-api
   Mode: console

@@ -153,3 +153,86 @@ groups:
             ③ 检查最近是否有代码变更影响了消费者逻辑。
             常见根因：消费者代码 bug（panic/类型断言失败）/ 处理依赖不可用 / 死信队列未配置。
             恢复：修复消费者代码后重新部署；积压消息会被自动消费。
+
+  # ── 运行时资源：CPU / 内存 / goroutine ─────────────────────────────────────
+  # 这三类是 RED/依赖告警覆盖不到的"病因"层：RED 告诉你"延迟高了/报错了"，这里告诉你
+  # "根因是 goroutine 泄漏 / 堆涨爆 / CPU 打满"。出事后先看这组定位根因类别，
+  # 再去对应服务的 pprof 端口（order-api=6060 / user-api=6061 / user-rpc=6062 / inventory-rpc=6063）
+  # 抓 cpu/heap/goroutine profile 精确定位到代码行。
+  - name: runtime_alerts
+    rules:
+      # goroutine 绝对数过高：往往是泄漏已积累到临界点
+      - alert: GoroutineCountHigh
+        expr: go_goroutines > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} 协程数 {{ $value }} 超过 1000，疑似 goroutine 泄漏"
+          description: >-
+            影响：协程数持续高位，可能正在泄漏；每条泄漏 goroutine 占约 2~8KB 栈 + 它持有的引用内存，
+            积累到一定量会压垮进程（OOM 或调度延迟飙升）。
+            ① 抓 goroutine profile：curl "http://localhost:<该服务 606x 端口>/debug/pprof/goroutine?debug=2" > goroutine.txt，
+            数同一条栈出现了多少次，卡在 channel recv / Mutex.Lock / select{} 的就是泄漏候选。
+            ② Grafana 看 go_goroutines 趋势：单调上涨 = 慢泄漏；阶梯跳变后不回落 = 单次 fork 未回收。
+            常见根因：consumer 里 go func() 漏传 context / channel 无人发送 / HTTP client 无超时卡在 Read。
+
+      # goroutine 快速增长：10 分钟内净增 > 300 且基数 > 200，泄漏的早期信号
+      - alert: GoroutineLeakSuspected
+        expr: (go_goroutines - (go_goroutines offset 10m)) > 300 and on(instance) (go_goroutines > 200)
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} 协程数 10 分钟净增超 300，疑似 goroutine 泄漏"
+          description: >-
+            影响：协程在持续增长且未见回收，是泄漏的典型早期特征；任其发展会触发 GoroutineCountHigh 直至 OOM。
+            ① 立即抓 goroutine profile 归档为 before-goroutine.prof（修复后做 base/diff 对比验证）。
+            ② 隔 1~2 分钟再抓一次，diff 两次 profile，新增的栈就是泄漏源。
+            常见根因：for 循环内 go func() 无退出条件 / context 未 cancel / sync.WaitGroup.Done 漏调。
+
+      # CPU 占用高：rate 直接给"占用的 CPU 核数"，0.8 = 约 0.8 个核
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} 持续占用 {{ $value }} 个 CPU 核，可能存在 CPU 热点"
+          description: >-
+            影响：CPU 持续打满会拉长所有请求的调度延迟，GC 占比也可能随之升高，表现为 RED 的 HighLatencyP99。
+            注意：rate(process_cpu_seconds_total[5m]) 的值就是占用的 CPU 核数。
+            ① 抓 30s CPU profile：go tool pprof -seconds=30 "http://localhost:<该服务 606x 端口>/debug/pprof/profile"。
+            ② 火焰图找最宽的"平顶"，平顶函数就是热点；用 list <函数名> 看到具体代码行。
+            ③ 若热点在 runtime.gcBgMarkWorker / runtime.mallocgc：是分配压力导致的 GC 开销，
+            需降分配（看 go_memstats_* 是否同步涨），而非降业务计算。
+            常见根因：热路径 O(n²) 实现 / 未缓存的高频计算 / ReDoS（注：Go 自带 regexp 是 RE2，对回溯 ReDoS 免疫）。
+
+      # 堆内存绝对值高：单实例 inuse 堆 > 512MiB
+      - alert: HeapUsageHigh
+        expr: go_memstats_heap_inuse_bytes > 536870912
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} inuse 堆内存 {{ $value | humanize1024 }} 超过 512MiB"
+          description: >-
+            影响：堆越大，GC 标记/清扫成本越高，可能进入"堆涨→GC 慢→延迟升→更堆积"的恶性循环。
+            ① 抓 heap profile：curl "http://localhost:<该服务 606x 端口>/debug/pprof/heap" > heap-before.prof。
+            ② go tool pprof -http :8081 heap-before.prof，sample 选 inuse_space，按 cum 排序定位最重的分配路径。
+            常见根因：全局 map/slice 无淘汰（缓存只进不出）/ 大对象未释放 / 批量查询结果未分页。
+
+      # 堆内存快速增长：10 分钟内 inuse 堆翻倍，内存泄漏早期信号
+      - alert: HeapLeakSuspected
+        expr: go_memstats_heap_inuse_bytes > 2 * (go_memstats_heap_inuse_bytes offset 10m)
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} inuse 堆 10 分钟内翻倍，疑似内存泄漏"
+          description: >-
+            影响：堆在加速增长，若不干预会触及 GOMEMLIMIT / 容器内存限制触发 OOMKill。
+            ① 隔 1~2 分钟连抓两次 heap profile，用 go tool pprof -base heap-1.prof heap-2.prof 做 diff，只看增长部分——那是泄漏对象。
+            ② 区分涨的是 alloc_objects（对象数）还是 alloc_space（字节数）：
+            对象数涨 = 小对象泄漏（未关闭迭代器/未删 map entry）；字节数涨 = 大对象泄漏。
+            常见根因：缓存无 TTL 无上限 / goroutine 泄漏持有的引用未释放 / defer 在长循环里累积。

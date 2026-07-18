@@ -2,6 +2,17 @@ Name: user-rpc
 ListenOn: 0.0.0.0:9090
 Mode: dev
 
+# --- 内置开发服务器（devserver.Config） ---
+# pprof / healthz / metrics 三合一调试端口。端口与 api 服务错开。
+DevServer:
+  Enabled: true
+  Host: 0.0.0.0
+  Port: 6062
+  HealthPath: /healthz
+  HealthResponse: "OK"
+  EnableMetrics: true
+  EnablePprof: true
+
 Health: true
 Etcd:
   Hosts:
