@@ -188,7 +188,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-do-not-use-in-prod}
       OTLP_ENDPOINT: jaeger:4317
       REDIS_HOST: redis
-     KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
 
   inventory-rpc:
     build:
@@ -296,17 +296,13 @@ services:
     image: prom/alertmanager:v0.33.0
     ports:
       - "9093:9093"
+    # 凭据走 alertmanager 原生 *_file（bot_token_file / chat_id_file），
+    # 从挂载的 deploy/alertmanager/secrets/ 读文件内容，无需 env / sed / entrypoint。
+    # secrets/ 已 gitignore；首次 setup：cp -r secrets.example secrets 并填真值。
     volumes:
-      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.template:ro
+      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./deploy/alertmanager/telegram.tmpl:/etc/alertmanager/telegram.tmpl:ro
-    env_file: .env
-    entrypoint: ["sh", "-c"]
-    command:
-      - >-
-        awk -v bot="$$TELEGRAM_BOT_TOKEN" -v cid="$$TELEGRAM_CHAT_ID"
-        "{gsub(/\\$\\{TELEGRAM_BOT_TOKEN\\}/,bot);gsub(/\\$\\{TELEGRAM_CHAT_ID\\}/,cid)}1"
-        /etc/alertmanager/alertmanager.yml.template > /tmp/am.yml &&
-        exec /bin/alertmanager --config.file=/tmp/am.yml --storage.path=/alertmanager
+      - ./deploy/alertmanager/secrets:/etc/alertmanager/secrets:ro
     restart: unless-stopped
 
   prometheus:

@@ -17,6 +17,9 @@ vendor/
 .env
 *.env.local
 
+# alertmanager telegram 凭据（本地真值，从 deploy/alertmanager/secrets.example/ 复制后填入）
+deploy/alertmanager/secrets/
+
 .claude
 
 # Test coverage

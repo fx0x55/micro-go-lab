@@ -19,13 +19,20 @@
 #        TELEGRAM_BOT_TOKEN=123456789:ABCdefGhI...
 #        TELEGRAM_CHAT_ID=-1001234567890
 #      .env 已在 .gitignore 中，不会被提交。
+#   4. 把凭据写入文件（alertmanager 原生 *_file 读取方式）：
+#        cp -r deploy/alertmanager/secrets.example deploy/alertmanager/secrets
+#        echo -n "123456789:ABCdefGhI..." > deploy/alertmanager/secrets/telegram_bot_token
+#        echo -n "-1001234567890"      > deploy/alertmanager/secrets/telegram_chat_id
+#      deploy/alertmanager/secrets/ 已在 .gitignore 中，不会被提交。
 #
 # 网络注意：Telegram Bot API（api.telegram.org）在大陆默认不可直连。
 #   - 容器有透明代理 / 走海外节点时无需改动；
 #   - 否则用 api_url 指向一个可访问的 Telegram Bot API 反代地址（见下 receivers）。
 #
-# 本文件为模板，${TELEGRAM_BOT_TOKEN} / ${TELEGRAM_CHAT_ID} 在容器启动时由
-# docker-compose 通过 sed 注入真实值（见 docker-compose.yml alertmanager 服务）。
+# 凭据走 alertmanager 原生的 *_file 字段（bot_token_file / chat_id_file）：
+# 启动时从 /etc/alertmanager/secrets/ 读文件内容，无需任何 sed/env 插值。
+# 文件由 docker-compose(-dev).yml 从 deploy/alertmanager/secrets/ 挂载，
+# 该目录已 gitignore；首次 setup 参考 deploy/alertmanager/secrets.example/。
 
 templates:
   - "/etc/alertmanager/telegram.tmpl"
@@ -57,14 +64,17 @@ route:
 receivers:
   # 所有 receiver 直接通过 Telegram Bot API 推送到目标 chat。
   # severity 路由在 Alertmanager 层完成，统一发到同一个 Telegram 群。
-  # bot_token 和 chat_id 通过环境变量注入（见文件顶部说明）。
+  # bot_token / chat_id 走 *_file：alertmanager 启动时从挂载的文件读取，
+  # 是官方处理 secret 的标准方式（兼容 docker secrets / k8s secret / vault）。
+  # 文件由 docker-compose(-dev).yml 从 deploy/alertmanager/secrets/ 挂载，
+  # 真实值维护在该目录（已 gitignore）；协作者首次 setup 见 secrets.example/。
   #
   # 关于 api_url：默认 https://api.telegram.org。如容器无法直连 Telegram，
   # 取消注释并改成可达的反代地址（反代需转发到 https://api.telegram.org）。
   - name: "default"
     telegram_configs:
-      - bot_token: "${TELEGRAM_BOT_TOKEN}"
-        chat_id: ${TELEGRAM_CHAT_ID}
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id_file: /etc/alertmanager/secrets/telegram_chat_id
         message_thread_id: 9
         send_resolved: true
         parse_mode: "HTML"
@@ -72,8 +82,8 @@ receivers:
 
   - name: "critical"
     telegram_configs:
-      - bot_token: "${TELEGRAM_BOT_TOKEN}"
-        chat_id: ${TELEGRAM_CHAT_ID}
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id_file: /etc/alertmanager/secrets/telegram_chat_id
         message_thread_id: 7
         send_resolved: true
         parse_mode: "HTML"
@@ -81,8 +91,8 @@ receivers:
 
   - name: "warning"
     telegram_configs:
-      - bot_token: "${TELEGRAM_BOT_TOKEN}"
-        chat_id: ${TELEGRAM_CHAT_ID}
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id_file: /etc/alertmanager/secrets/telegram_chat_id
         message_thread_id: 4
         send_resolved: true
         parse_mode: "HTML"

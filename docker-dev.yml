@@ -134,23 +134,13 @@ services:
     image: prom/alertmanager:v0.33.0
     ports:
       - "9093:9093"
-    # 占位环境变量：alertmanager.yml 里 chat_id 需要插值成 int，
- # 若未提供真实 TELEGRAM_* 凭据，这里给默认值让容器能启动（告警发不出去但会进日志）。
- # 配真实 Telegram 通知时，用 .env / 环境覆盖这两个值即可。
-    environment:
-      - TELEGRAM_BOT_TOKEN=placeholder
-      # chat_id 用非零值（0 会被 alertmanager 判为缺失），配真实通知时覆盖即可。
-      - TELEGRAM_CHAT_ID=1
+    # 与 docker-compose.yml 一致：凭据走 alertmanager 原生 *_file，从挂载的
+    # deploy/alertmanager/secrets/ 读文件内容。secrets/ 已 gitignore；
+    # 首次 setup：cp -r secrets.example secrets 并填真值（或保留占位值能启动）。
     volumes:
-      - ./deploy/alertmanager:/etc/alertmanager:ro
-    # alertmanager 0.33 不原生支持 ${VAR} 插值；本地 dev 用 sed 把模板里的
-    # ${TELEGRAM_*} 占位符替换成 environment 的值（默认占位），写到 /tmp 再加载。
-    # 生产版走 docker-compose.yml 的真实凭据注入。
-    user: "0"
-    entrypoint:
-      - /bin/sh
-      - -c
-      - sed 's|$${TELEGRAM_BOT_TOKEN}|'"$$TELEGRAM_BOT_TOKEN"'|g; s|$${TELEGRAM_CHAT_ID}|'"$$TELEGRAM_CHAT_ID"'|g' /etc/alertmanager/alertmanager.yml > /tmp/am.yml && exec alertmanager --config.file=/tmp/am.yml --storage.path=/alertmanager
+      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/alertmanager/telegram.tmpl:/etc/alertmanager/telegram.tmpl:ro
+      - ./deploy/alertmanager/secrets:/etc/alertmanager/secrets:ro
     restart: unless-stopped
 
   prometheus:
