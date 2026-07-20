@@ -191,6 +191,9 @@ make debug-user-rpc         # 端口 40002
 make debug-order-api        # 端口 40003
 ```
 
+**性能排查（pprof）：** 想系统学习 pprof 看 [docs/pprof-guide.md](docs/pprof-guide.md)；
+线上 CPU / 内存 / goroutine 事故排查实操看 [docs/troubleshooting/](docs/troubleshooting/README.md)。
+
 ## 可观测性
 
 启动监控栈后（`make docker-full` 或 `make infra-full`）：
