@@ -11,6 +11,7 @@ import (
 	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
 	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 // pollerCaller 用于日志标识 panic 发生在 poller goroutine。
@@ -70,54 +71,54 @@ func (p *Poller) poll(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (p *Poller) tick(ctx context.Context) {
-	events, err := p.outboxRepo.FindPending(p.batchSize)
-	if err != nil {
-		logx.Error("outbox find pending failed", logx.Field("error", err.Error()))
-		return
-	}
+	err := p.outboxRepo.ProcessPending(p.batchSize, func(tx *gorm.DB, events []xevent.OutboxEvent) error {
+		for i := range events {
+			event := &events[i]
 
-	for i := range events {
-		event := &events[i]
+			msg := &Message{
+				Topic: event.Topic,
+				Key:   event.EventKey,
+				Value: []byte(event.Payload),
+				Headers: map[string]string{
+					"event_id":    event.EventID,
+					"event_type":  event.EventType,
+					"version":     strconv.Itoa(event.Version),
+					"occurred_at": event.CreatedAt.Format(time.RFC3339),
+				},
+			}
 
-		msg := &Message{
-			Topic: event.Topic,
-			Key:   event.EventKey,
-			Value: []byte(event.Payload),
-			Headers: map[string]string{
-				"event_id":    event.EventID,
-				"event_type":  event.EventType,
-				"version":     strconv.Itoa(event.Version),
-				"occurred_at": event.CreatedAt.Format(time.RFC3339),
-			},
-		}
-
-		err := p.producer.Publish(ctx, msg)
-		if err != nil {
-			logx.Error("outbox publish failed",
-				logx.Field("event_id", event.EventID),
-				logx.Field("topic", event.Topic),
-				logx.Field("error", err.Error()),
-			)
-			if err := p.outboxRepo.IncrementRetryCount(event.ID, err.Error()); err != nil {
-				logx.WithContext(ctx).Error(
-					"outbox increment retry failed",
-					logx.Field("id", event.ID),
+			if err := p.producer.Publish(ctx, msg); err != nil {
+				logx.Error("outbox publish failed",
+					logx.Field("event_id", event.EventID),
+					logx.Field("topic", event.Topic),
 					logx.Field("error", err.Error()),
 				)
+				if incrErr := p.outboxRepo.IncrementRetryCount(tx, event.ID, err.Error()); incrErr != nil {
+					logx.WithContext(ctx).Error(
+						"outbox increment retry failed",
+						logx.Field("id", event.ID),
+						logx.Field("error", incrErr.Error()),
+					)
+				}
+				xmetrics.OutboxEventsPublished.WithLabelValues(event.Topic, "error").Inc()
+				continue
 			}
-			xmetrics.OutboxEventsPublished.WithLabelValues(event.Topic, "error").Inc()
-			continue
-		}
 
-		if err := p.outboxRepo.MarkAsSent(event.ID); err != nil {
-			logx.Error("outbox mark sent failed", logx.Field("id", event.ID), logx.Field("error", err.Error()))
-		}
-		xmetrics.OutboxEventsPublished.WithLabelValues(event.Topic, "success").Inc()
+			if err := p.outboxRepo.MarkAsSent(tx, event.ID); err != nil {
+				logx.Error("outbox mark sent failed", logx.Field("id", event.ID), logx.Field("error", err.Error()))
+				return err // 事务回滚，整批重试
+			}
+			xmetrics.OutboxEventsPublished.WithLabelValues(event.Topic, "success").Inc()
 
-		logx.Info("outbox event published",
-			logx.Field("event_id", event.EventID),
-			logx.Field("topic", event.Topic),
-			logx.Field("event_type", event.EventType),
-		)
+			logx.Info("outbox event published",
+				logx.Field("event_id", event.EventID),
+				logx.Field("topic", event.Topic),
+				logx.Field("event_type", event.EventType),
+			)
+		}
+		return nil
+	})
+	if err != nil {
+		logx.Error("outbox process pending failed", logx.Field("error", err.Error()))
 	}
 }

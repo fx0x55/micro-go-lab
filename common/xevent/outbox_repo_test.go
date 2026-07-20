@@ -63,7 +63,7 @@ func TestOutboxRepository_MarkAsSent(t *testing.T) {
 		t.Fatalf("Insert failed: %v", err)
 	}
 
-	if err := repo.MarkAsSent(event.ID); err != nil {
+	if err := repo.MarkAsSent(db, event.ID); err != nil {
 		t.Fatalf("MarkAsSent failed: %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestOutboxRepository_IncrementRetryCount(t *testing.T) {
 	}
 
 	for i := 1; i <= 3; i++ {
-		if err := repo.IncrementRetryCount(event.ID, "error"); err != nil {
+		if err := repo.IncrementRetryCount(db, event.ID, "error"); err != nil {
 			t.Fatalf("IncrementRetryCount %d failed: %v", i, err)
 		}
 	}
