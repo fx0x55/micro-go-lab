@@ -26,9 +26,6 @@ import (
 //	BUG_CPU=1 BUG_CPU_ITERS=4000 go run ./service/order/api
 // ──────────────────────────────────────────────────────────────────────────
 
-// bugEnabled 统一读取故障注入开关，env 值为 "1" 视为开启。
-func bugEnabled(env string) bool { return os.Getenv(env) == "1" }
-
 // cpuBugSink 充当"黑洞"，防止编译器把只写不读的热循环优化掉（死代码消除）。
 var cpuBugSink int
 

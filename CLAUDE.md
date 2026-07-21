@@ -159,6 +159,7 @@ Tracing is handled entirely by go-zero's built-in OTel integration — no custom
   - **Slow query threshold**: configurable via `DatabaseConfig.SlowThreshold` (default 200ms). Set `DATABASE_SLOW_THRESHOLD` env var to override.
   - **PII desensitization**: SQL string literals are redacted (`'value'` → `'?'`) before logging via regex `'(?:[^']|'')*'`.
   - **Error filtering**: `gorm.ErrRecordNotFound` is excluded from error-level logging (expected in many query flows).
+  - **Deadlock tagging**: SQL errors recognized as InnoDB deadlock (1213) / lock-wait-timeout (1205) via `xdb.IsDeadlock` get an extra `deadlock=true` field, so they can be filtered in Loki (`| json | deadlock="true"`).
 
 #### Log Aggregation (Loki + Promtail)
 
@@ -178,6 +179,7 @@ Custom Prometheus counters registered in `common/xmetrics` (auto-registered via 
 - **`orders_created_total`** (order-api): labels `{result}` where result ∈ {success, conflict, error}. Tracks order creation volume, conflicts from idempotency gate, and failures.
 - **`users_registered_total`** (user-api): labels `{result}` where result ∈ {success, exists, error}. Tracks registration attempts.
 - **`rpc_calls_breaker_open_total`** (order-api): labels `{method}`. Incremented when `ValidateUser`/`GetUser` gRPC calls are rejected by go-zero's circuit breaker (`breaker.ErrServiceUnavailable`). Enables alerting on breaker-open state.
+- **`db_deadlocks_total`** (any service using `xdb.WithRetry`): labels `{db, outcome}` where outcome ∈ {retried, exhausted}. Incremented by `xdb.WithRetry` when a transaction is retried on InnoDB 1213/1205. `retried` = self-healed; `exhausted` = retries spent, request failed. Primary "discovery" signal for database deadlocks.
 
 #### DB Connection Pool Metrics
 
@@ -193,6 +195,7 @@ Alert definitions in `deploy/prometheus/rules.yml` (loaded by `deploy/prometheus
 | `HighLatencyP99` | p99 latency > 1s for 5m | warning | Latency degradation |
 | `CircuitBreakerOpen` | `rpc_calls_breaker_open_total` increase > 0 for 5m | critical | Downstream dependency failing |
 | `DBConnectionSaturation` | `go_sql_in_use_connections / go_sql_max_open_connections > 0.8` for 5m | warning | Connection pool exhaustion |
+| `DeadlockRetrySpike` | `increase(db_deadlocks_total[5m]) > 0` for 2m | warning | Transactions retried on InnoDB deadlock / lock-wait |
 
 Note: go-zero's HTTP metrics are `{http_server_requests_duration_ms, http_server_requests_code_total}` with labels `{path, method, code}`. Alerts aggregate across `job` label (service).
 
@@ -211,6 +214,8 @@ New variables added in Phase 2 (Observability):
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_SLOW_THRESHOLD` | 200ms | SQL query duration threshold for slow query logging (e.g., "500ms") |
+| `BUG_DB_DEADLOCK` | unset | Set to `1` to enable the database-deadlock troubleshooting lab (inventory-rpc reverts `Reserve` to reverse product→reservation lock order + a sleep window). See `docs/troubleshooting/database-deadlock.md`. |
+| `BUG_DEADLOCK_SLEEP_MS` | 300 | Deadlock lab's artificial in-transaction `SLEEP` to widen the race window. |
 
 Note: pre-existing variables from Phases 0-1:
 - `DATABASE_SSLMODE`, `DATABASE_CONN_MAX_LIFETIME`, `DATABASE_CONN_MAX_IDLE_TIME`

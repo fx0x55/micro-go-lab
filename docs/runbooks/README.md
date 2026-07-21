@@ -20,6 +20,7 @@
 | HighLatencyP99 | warning | [high-latency-p99.md](high-latency-p99.md) |
 | CircuitBreakerOpen | critical | [circuit-breaker-open.md](circuit-breaker-open.md) |
 | DBConnectionSaturation | warning | [db-connection-saturation.md](db-connection-saturation.md) |
+| DeadlockRetrySpike | warning | [database-deadlock.md](database-deadlock.md) |
 | OutboxStuck | warning | [outbox-stuck.md](outbox-stuck.md) |
 | PanicRecoveredSpike | critical | [panic-recovered-spike.md](panic-recovered-spike.md) |
 

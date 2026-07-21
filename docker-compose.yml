@@ -19,6 +19,11 @@ services:
   # === Databases ===
   mysql:
     image: mysql:8.4
+    # innodb_print_all_deadlocks：每次死锁都把完整死锁图写进 error log（否则只留最后一次、且可能被覆盖）。
+    # 死锁 lab 与 DeadlockRetrySpike 告警的"调试"链都依赖它。
+    command: --innodb-print-all-deadlocks=ON
+    labels:
+      logging: promtail
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: users_db

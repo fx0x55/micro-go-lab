@@ -68,12 +68,17 @@ func (g *gormLogxLogger) Trace(
 	switch {
 	case err != nil && g.level >= gormlogger.Error && !isRecordNotFound(err):
 		sql, rows := fc()
-		logx.WithContext(ctx).Errorw("slow/error sql",
+		fields := []logx.LogField{
 			logx.Field("elapsed", elapsed.String()),
 			logx.Field("rows", rows),
 			logx.Field("sql", redactSQL(sql)),
 			logx.Field("error", err.Error()),
-		)
+		}
+		// 死锁/锁等待加 deadlock=true 标记，便于在 Loki 里按字段一键过滤定位（调试链）。
+		if IsDeadlock(err) {
+			fields = append(fields, logx.Field("deadlock", true))
+		}
+		logx.WithContext(ctx).Errorw("slow/error sql", fields...)
 	case g.slowThreshold > 0 && elapsed > g.slowThreshold && g.level >= gormlogger.Warn:
 		sql, rows := fc()
 		logx.WithContext(ctx).Sloww("slow sql",

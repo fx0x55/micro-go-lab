@@ -1,12 +1,13 @@
 # 线上排查实操（Troubleshooting Lab）
 
-> 教你怎么排查 Go 服务在线上的三类资源问题：CPU 热点、内存泄漏、goroutine 泄漏。
-> 前两个用真实注入的 bug + 真实流量 + 真实 pprof 数据走完整流程；goroutine 那块讲套路。
+> 教你怎么排查 Go 服务在线上的三类资源问题（CPU 热点、内存泄漏、goroutine 泄漏），以及一类数据库并发问题（死锁）。
+> 资源问题用真实注入的 bug + 真实流量 + 真实 profile 走完整流程；死锁用真实 MySQL 复现一次 1213。
 
 ## 文档
 
 | 文档 | 形态 | 故障注入开关 |
 |------|------|--------------|
+| [database-deadlock.md](database-deadlock.md) | lab（真实 MySQL 1213） | `BUG_DB_DEADLOCK=1` |
 | [cpu-hotspot.md](cpu-hotspot.md) | lab（有真实 profile） | `BUG_CPU=1` |
 | [memory-leak.md](memory-leak.md) | lab（有真实 profile） | `BUG_MEMLEAK=1` |
 | [goroutine-deadlock-quickref.md](goroutine-deadlock-quickref.md) | 速查（讲套路，不搭 lab） | — |

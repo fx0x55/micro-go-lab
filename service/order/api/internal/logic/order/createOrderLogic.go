@@ -10,6 +10,7 @@ import (
 
 	"github.com/fx0x55/micro-go-lab/common/ecode"
 	"github.com/fx0x55/micro-go-lab/common/xevent"
+	"github.com/fx0x55/micro-go-lab/common/xlab"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/model"
 	"github.com/fx0x55/micro-go-lab/service/order/api/internal/svc"
@@ -55,13 +56,13 @@ func (l *CreateOrderLogic) Create(
 	// troubleshooting lab: BUG_CPU=1 时在创建订单热路径上触发 CPU 热点故障。
 	// 放在所有副作用之前，使得任何持合法 JWT 的请求都会烧 CPU（即便用户在库里不存在），
 	// 降低实验触发门槛。
-	if bugEnabled("BUG_CPU") {
+	if xlab.BugEnabled("BUG_CPU") {
 		computeRiskScore(req)
 	}
 
 	// troubleshooting lab: BUG_MEMLEAK=1 时把"风控画像"塞进全局缓存，永不淘汰——
 	// 模拟线上最常见的内存泄漏（缓存无 TTL 无上限）。放在副作用之前，便于压测复现。
-	if bugEnabled("BUG_MEMLEAK") {
+	if xlab.BugEnabled("BUG_MEMLEAK") {
 		cacheRiskProfile(userID, req, idempotencyKey)
 	}
 

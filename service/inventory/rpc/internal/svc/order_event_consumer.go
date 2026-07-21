@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fx0x55/micro-go-lab/common/xdb"
 	"github.com/fx0x55/micro-go-lab/common/xevent"
 	"github.com/fx0x55/micro-go-lab/common/xmetrics"
 	"github.com/fx0x55/micro-go-lab/common/xstream"
@@ -30,21 +31,29 @@ func (sc *ServiceContext) handleOrderEvent(msg *xstream.Message) error {
 		return err
 	}
 
-	processed, err := sc.IdempotentRepo.Process(eventID, func(tx *gorm.DB) error {
-		data, dErr := json.Marshal(envelope.Data)
-		if dErr != nil {
-			return dErr
-		}
+	// 用 xdb.WithRetry 包住整个幂等处理单元：死锁/锁等待（1213/1205）会让整个事务回滚，
+	// 这里重试就是从头再开一个新事务（IdempotentRepo.Process 内部自带 db.Transaction）。
+	// 重试单元 = 整个事务，不能只重试事务里的单条语句（回滚后的 tx 已废）。
+	var processed bool
+	err := xdb.WithRetry(sc.ctx, sc.Config.Database.DBName, func() error {
+		p, perr := sc.IdempotentRepo.Process(eventID, func(tx *gorm.DB) error {
+			data, dErr := json.Marshal(envelope.Data)
+			if dErr != nil {
+				return dErr
+			}
 
-		switch envelope.Event {
-		case xevent.OrderCreated:
-			return sc.handleOrderCreated(tx, data)
-		case xevent.OrderCancelled:
-			return sc.handleOrderCancelled(tx, data)
-		default:
-			logx.Infof("ignoring order-event type %s", envelope.Event)
-			return nil
-		}
+			switch envelope.Event {
+			case xevent.OrderCreated:
+				return sc.handleOrderCreated(tx, data)
+			case xevent.OrderCancelled:
+				return sc.handleOrderCancelled(tx, data)
+			default:
+				logx.Infof("ignoring order-event type %s", envelope.Event)
+				return nil
+			}
+		})
+		processed = p
+		return perr
 	})
 	if err != nil {
 		logx.Errorf("order-event processing failed: type=%s event_id=%s err=%v",

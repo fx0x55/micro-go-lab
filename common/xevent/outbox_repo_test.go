@@ -166,13 +166,13 @@ func TestOutboxRepository_FindPending(t *testing.T) {
 	})
 	// 插入超过重试次数的事件
 	repo.Insert(db, &OutboxEvent{
-		EventID:   "max-retries",
-		Topic:     "t",
-		EventKey:  "k",
-		EventType: "e",
-		Version:   1,
-		Payload:   "{}",
-		Status:    OutboxStatusPending,
+		EventID:    "max-retries",
+		Topic:      "t",
+		EventKey:   "k",
+		EventType:  "e",
+		Version:    1,
+		Payload:    "{}",
+		Status:     OutboxStatusPending,
 		RetryCount: MaxRetries,
 	})
 

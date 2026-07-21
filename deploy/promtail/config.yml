@@ -39,3 +39,31 @@ scrape_configs:
       - labels:
           level:
           service:
+
+  # MySQL 错误日志：innodb_print_all_deadlocks 把每次死锁的完整死锁图写进这里。
+  # MySQL 容器打了 logging=promtail 标签，但其输出是纯文本而非 JSON，
+  # 因此单列一个 job，用 regex 抽出死锁关键行作为 Loki label，便于全文检索。
+  - job_name: mysql
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]
+          - name: name
+            values: ["mysql"]
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - target_label: 'service'
+        replacement: 'mysql'
+    pipeline_stages:
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
+          max_wait_time: 3s
+      - regex:
+          expression: '(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(?P<level>\w+)\s+(?P<msg>.*)'
+      - labels:
+          level:
+          service:

@@ -73,6 +73,25 @@ groups:
   # ── 数据库 ────────────────────────────────────────────────────────────────
   - name: database_alerts
     rules:
+      # 死锁重试激增：xdb.WithRetry 捕获到 InnoDB 1213/1205 并在退避重试。
+      # 出现即说明死锁正在真实发生；outcome=exhausted 说明重试次数已耗尽仍失败（请求直接报错）。
+      - alert: DeadlockRetrySpike
+        expr: increase(db_deadlocks_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.db }} 5 分钟内捕获 {{ $value }} 次死锁/锁等待，事务正在退避重试"
+          description: >-
+            影响：事务因死锁被 InnoDB 回滚后重试；少量重试是正常自愈，但持续激增意味着
+            加锁冲突已超出偶发范围，延迟会随退避上升，outcome=exhausted 时请求会直接失败。
+            ① 抓 MySQL 死锁图：进入 mysql 容器执行 SHOW ENGINE INNODB STATUS\G，翻 LATEST DETECTED DEADLOCK，
+            看两个事务各持有什么锁、等什么锁（本仓库已开 innodb_print_all_deadlocks，每次都会持久化进 error log）。
+            ② Loki 搜死锁日志：{service=~".*"} | json | deadlock="true"，按 trace 去 Jaeger 对账。
+            ③ 指标拆 outcome：db_deadlocks_total{outcome="exhausted"} 上涨 = 重试已救不回来，需立刻止血。
+            常见根因：多事务加锁顺序不一致（AB-BA）/ RR 隔离级别下二级索引 gap lock / 长事务持锁过久。
+            恢复：统一加锁顺序 + 短事务 + 应用层 1213 重试（见 runbooks/database-deadlock.md）。
+
       - alert: DBConnectionSaturation
         expr: job:db_conn_usage_ratio > 0.8
         for: 5m
